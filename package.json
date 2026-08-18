@@ -1,0 +1,14 @@
+{
+  "name": "gitui-mouse",
+  "version": "1.0.0",
+  "private": true,
+  "description": "鼠标优先的终端 Git 管理器",
+  "main": "src/gitui.js",
+  "scripts": {
+    "start": "node src/gitui.js",
+    "check": "node --check src/gitui.js"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81"
+  }
+}
