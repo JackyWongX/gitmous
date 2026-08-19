@@ -93,7 +93,8 @@ module.exports = {
     try {
       this.saveSettings({
         language: this.language,
-        themeColor: this.COLORS.accent
+        themeColor: this.COLORS.accent,
+        detailDiffExpanded: this.detailDiffExpanded
       });
     } catch (error) {
       this.toast(this.t('settingsSaveFailed', { message: error.message }), this.COLORS.red);
@@ -286,6 +287,9 @@ module.exports = {
 
   clearDetailDiffView() {
     this.detailDiffView = null;
+    this.detailDiffLineMeta = [];
+    this.detailDiffRaw = '';
+    this.hideDiffLineToolbar();
     if (this.detailToggleButton) this.detailToggleButton.hide();
     this.updateDetailConflictButtons();
   },
@@ -336,6 +340,8 @@ module.exports = {
     const args = this.detailDiffExpanded ? nextContext.expandedArgs : nextContext.collapsedArgs;
     const diff = await this.git(args).catch(error => this.t('cannotReadDiff', { message: error.message }));
     const label = typeof nextContext.label === 'function' ? nextContext.label() : nextContext.label;
+    this.hideDiffLineToolbar();
+    this.detailDiffRaw = diff || '';
     this.detailPanel.setLabel(label);
     this.detailPanel.setContent(this.formatDiff(diff || this.t('noTextDiff')));
     this.detailPanel.setScroll(0);
@@ -346,6 +352,7 @@ module.exports = {
     if (!this.detailDiffView) return;
     const context = { ...this.detailDiffView };
     this.detailDiffExpanded = !this.detailDiffExpanded;
+    this.persistUserSettings();
     this.runUiAction(() => this.showDetailDiff(context), this.detailDiffExpanded ? this.t('expandDiff') : this.t('collapseDiff'));
   },
 
@@ -405,11 +412,12 @@ module.exports = {
   handleScrollableWheel(data) {
     if (!data || (data.action !== 'wheelup' && data.action !== 'wheeldown')) return;
     if (this.activeDropdownMenu && this.pointInside(this.activeDropdownMenu, data)) return;
-    const targets = [this.changeArea, this.historyArea];
+    const targets = [this.changeArea, this.historyArea, this.detailPanel];
     const target = targets.find(element => element && element.visible && this.pointInside(element, data));
     if (!target || typeof target.scroll !== 'function') return;
     const amount = Math.max(1, Math.floor((target.height || 6) / 3));
     target.scroll(data.action === 'wheelup' ? -amount : amount);
+    if (target === this.detailPanel) this.hideDiffLineToolbar();
     this.screen.render();
   },
 
@@ -553,6 +561,82 @@ module.exports = {
       this.activeDropdownMenu = null;
       this.destroyElement(menu);
     }
+  },
+
+  hideDiffLineToolbar() {
+    if (!this.activeDiffLineToolbar) return;
+    const toolbar = this.activeDiffLineToolbar;
+    this.activeDiffLineToolbar = null;
+    this.destroyElement(toolbar.root);
+    this.screen.render();
+  },
+
+  detailContentLineFromMouse(data) {
+    if (!this.detailPanel || !this.detailPanel.visible || !this.pointInside(this.detailPanel, data)) return -1;
+    let pos = null;
+    try {
+      pos = this.detailPanel.lpos || (typeof this.detailPanel._getCoords === 'function' ? this.detailPanel._getCoords() : null);
+    } catch (_) {
+      pos = null;
+    }
+    if (!pos || data.y <= pos.yi || data.y >= pos.yl - 1) return -1;
+    return (this.detailPanel.childBase || 0) + data.y - pos.yi - 1;
+  },
+
+  handleDetailDiffHover(data) {
+    if (!data || data.action !== 'mousemove') return;
+    if (this.activeDiffLineToolbar && this.pointInside(this.activeDiffLineToolbar.root, data)) return;
+    const lineIndex = this.detailContentLineFromMouse(data);
+    const meta = lineIndex >= 0 && this.detailDiffLineMeta ? this.detailDiffLineMeta[lineIndex] : null;
+    const hasFile = Boolean(this.detailDiffView && this.detailDiffView.file);
+    const conflictAction = Boolean(hasFile && this.detailDiffView.conflicted && meta && meta.actionable && meta.newLine);
+    const hunkAction = Boolean(
+      hasFile &&
+      !this.detailDiffView.conflicted &&
+      !this.detailDiffView.staged &&
+      meta &&
+      meta.actionable &&
+      (meta.kind === 'add' || meta.kind === 'delete')
+    );
+    if (!conflictAction && !hunkAction) {
+      this.hideDiffLineToolbar();
+      return;
+    }
+    this.showDiffLineToolbar(data, meta);
+  },
+
+  showDiffLineToolbar(data, meta) {
+    if (
+      this.activeDiffLineToolbar &&
+      this.activeDiffLineToolbar.lineIndex === meta.displayLine &&
+      this.activeDiffLineToolbar.file === this.detailDiffView.file
+    ) return;
+    this.hideDiffLineToolbar();
+    let pos = null;
+    try {
+      pos = this.detailPanel.lpos || (typeof this.detailPanel._getCoords === 'function' ? this.detailPanel._getCoords() : null);
+    } catch (_) {
+      pos = null;
+    }
+    const left = pos ? Math.max(pos.xi + 2, pos.xl - 8) : Math.max(1, (this.screen.width || 80) - 10);
+    const root = this.blessed.box({
+      parent: this.screen,
+      top: data.y,
+      left,
+      width: 7,
+      height: 1,
+      mouse: true,
+      tags: true,
+      style: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt }
+    });
+    const acceptButton = this.button({ parent: root, top: 0, left: 0, width: 3, height: 1, shrink: false, content: '+', align: 'center', style: this.iconStyle });
+    const discardButton = this.button({ parent: root, top: 0, right: 0, width: 3, height: 1, shrink: false, content: '-', align: 'center', style: this.iconStyle });
+    this.bindTooltip(acceptButton, () => this.t(this.detailDiffView && this.detailDiffView.conflicted ? 'acceptCurrentChangeTooltip' : 'stageDiffHunkTooltip'));
+    this.bindTooltip(discardButton, () => this.t(this.detailDiffView && this.detailDiffView.conflicted ? 'discardCurrentChangeTooltip' : 'discardDiffHunkTooltip'));
+    acceptButton.on('press', () => this.acceptCurrentDiffChange(meta));
+    discardButton.on('press', () => this.discardCurrentDiffChange(meta));
+    this.activeDiffLineToolbar = { root, lineIndex: meta.displayLine, file: this.detailDiffView.file };
+    this.screen.render();
   },
 
   clearChildren(element) {
@@ -879,54 +963,119 @@ module.exports = {
     if (kind === 'file') return `{bold}${safe}{/bold}`;
     if (kind === 'add') return `{green-fg}${safe}{/green-fg}`;
     if (kind === 'delete') return `{red-fg}${safe}{/red-fg}`;
+    if (kind === 'conflict') return `{red-fg}${safe}{/red-fg}`;
     if (kind === 'meta') return `{yellow-fg}${safe}{/yellow-fg}`;
     if (kind === 'dim') return `{gray-fg}${safe}{/gray-fg}`;
     return safe;
   },
 
-  formatDiffDisplayLine(line, oldLine, newLine, forcedKind = null) {
+  conflictLineKind(line) {
+    if (/^[ +\-]{0,2}<{7}/.test(line)) return 'conflict';
+    if (/^[ +\-]{0,2}={7}/.test(line)) return 'conflict';
+    if (/^[ +\-]{0,2}>{7}/.test(line)) return 'conflict';
+    return null;
+  },
+
+  diffHunkInfo(line) {
+    const normal = line.match(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/);
+    if (normal) return { combined: false, oldLine: Number(normal[1]), newLine: Number(normal[2]) };
+    const combined = line.match(/^@@@\s+-(\d+)(?:,\d+)?(?:\s+-\d+(?:,\d+)?)*\s+\+(\d+)(?:,\d+)?\s+@@@/);
+    if (combined) return { combined: true, oldLine: Number(combined[1]), newLine: Number(combined[2]) };
+    return null;
+  },
+
+  isActionableDiffKind(kind) {
+    return ['add', 'delete', 'conflict'].includes(kind);
+  },
+
+  formatDiffDisplayLine(line, oldLine, newLine, forcedKind = null, meta = [], rawIndex = null) {
     const kind = forcedKind || this.diffLineKind(line);
+    const displayKind = this.conflictLineKind(line) || kind;
     return this.splitDisplayLine(line, this.diffBodyWidth()).map((part, index) => {
       const prefix = index === 0
         ? this.diffLineNumberPrefix(oldLine, newLine)
         : this.diffLineNumberPrefix(null, null);
-      return `${prefix}${this.colorizeDiffLine(part, kind)}`;
+      meta.push({
+        displayLine: meta.length,
+        rawLine: line,
+        rawIndex,
+        kind: displayKind,
+        oldLine,
+        newLine,
+        actionable: index === 0 && this.isActionableDiffKind(displayKind) && (oldLine != null || newLine != null)
+      });
+      return `${prefix}${this.colorizeDiffLine(part, displayKind)}`;
     }).join('\n');
   },
 
   formatDiff(content) {
+    const result = this.formatDiffWithMeta(content);
+    this.detailDiffLineMeta = result.meta;
+    return result.content;
+  },
+
+  formatDiffWithMeta(content) {
     const lines = String(content || '').split(/\r?\n/);
-    const hasHunk = lines.some(line => /^@@\s/.test(line));
-    if (!hasHunk) return lines.map(line => this.colorizeDiffLine(line)).join('\n');
+    const meta = [];
+    const hasHunk = lines.some(line => this.diffHunkInfo(line));
+    if (!hasHunk) {
+      const contentLines = lines.map(line => {
+        meta.push({
+          displayLine: meta.length,
+          rawLine: line,
+          rawIndex: null,
+          kind: this.conflictLineKind(line) || this.diffLineKind(line),
+          oldLine: null,
+          newLine: null,
+          actionable: false
+        });
+        return this.colorizeDiffLine(line);
+      });
+      return { content: contentLines.join('\n'), meta };
+    }
 
     let oldLine = 0;
     let newLine = 0;
     let inHunk = false;
-    return lines.map((line, index) => {
-      const hunk = line.match(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/);
+    let combinedHunk = false;
+    const contentLines = lines.map((line, index) => {
+      const hunk = this.diffHunkInfo(line);
       if (hunk) {
-        oldLine = Number(hunk[1]);
-        newLine = Number(hunk[2]);
+        oldLine = hunk.oldLine;
+        newLine = hunk.newLine;
         inHunk = true;
-        return this.formatDiffDisplayLine(line, null, null, 'hunk');
+        combinedHunk = hunk.combined;
+        return this.formatDiffDisplayLine(line, null, null, 'hunk', meta, index);
       }
       if (index === lines.length - 1 && line === '') {
+        meta.push({ displayLine: meta.length, rawLine: line, rawIndex: index, kind: 'text', oldLine: null, newLine: null, actionable: false });
         return '';
       }
       if (!inHunk || /^diff |^index |^commit |^new file |^deleted file |^similarity |^rename |^Binary files |^\+\+\+|^---/.test(line)) {
-        return this.formatDiffDisplayLine(line, null, null);
+        return this.formatDiffDisplayLine(line, null, null, null, meta, index);
       }
       if (/^\\ No newline at end of file/.test(line)) {
-        return this.formatDiffDisplayLine(line, null, null, 'dim');
+        return this.formatDiffDisplayLine(line, null, null, 'dim', meta, index);
+      }
+      if (combinedHunk) {
+        const kind = this.conflictLineKind(line) || (line[0] === '+' || line[1] === '+' ? 'add' : (line[0] === '-' || line[1] === '-' ? 'delete' : 'text'));
+        const hasOldLine = line[0] !== '+';
+        const hasNewLine = line[0] !== '-';
+        const currentOldLine = hasOldLine ? oldLine : null;
+        const currentNewLine = hasNewLine ? newLine : null;
+        if (hasOldLine) oldLine += 1;
+        if (hasNewLine) newLine += 1;
+        return this.formatDiffDisplayLine(line, currentOldLine, currentNewLine, kind, meta, index);
       }
       if (/^\+/.test(line)) {
-        return this.formatDiffDisplayLine(line, null, newLine++, 'add');
+        return this.formatDiffDisplayLine(line, null, newLine++, this.conflictLineKind(line) || 'add', meta, index);
       }
       if (/^-/.test(line)) {
-        return this.formatDiffDisplayLine(line, oldLine++, null, 'delete');
+        return this.formatDiffDisplayLine(line, oldLine++, null, 'delete', meta, index);
       }
       const contentLine = line.startsWith(' ') ? line : ` ${line}`;
-      return this.formatDiffDisplayLine(contentLine, oldLine++, newLine++, 'text');
-    }).join('\n');
+      return this.formatDiffDisplayLine(contentLine, oldLine++, newLine++, this.conflictLineKind(contentLine) || 'text', meta, index);
+    });
+    return { content: contentLines.join('\n'), meta };
   }
 };

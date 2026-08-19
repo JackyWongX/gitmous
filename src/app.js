@@ -36,7 +36,7 @@ class GitUiApp {
     this.autoRefreshRunning = false;
     this.commitInputActive = false;
     this.detailDiffView = null;
-    this.detailDiffExpanded = false;
+    this.detailDiffExpanded = loadedSettings.settings.detailDiffExpanded;
 
     createLayout(this);
     this.bindEvents();
@@ -82,6 +82,7 @@ class GitUiApp {
     this.screen.on('mouse', data => this.activateCommitInputIfInside(data));
     this.screen.on('mouse', data => this.releaseCommitInputIfOutside(data));
     this.screen.on('mouse', data => this.handleScrollableWheel(data));
+    this.screen.on('mouse', data => this.handleDetailDiffHover(data));
     this.screen.on('keypress', (ch, key) => this.handleCommitInputKey(ch, key));
     this.screen.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
     process.on('uncaughtException', error => this.reportUnhandledError(error));

@@ -168,6 +168,7 @@ module.exports = {
     const baseArgs = staged ? ['diff', '--cached'] : ['diff'];
     await this.showDetailDiff({
       file: item.file,
+      staged: Boolean(staged),
       conflicted: this.isConflictStatusCode(item.code),
       label: () => this.t('diffLabel', { file: item.file }),
       collapsedArgs: [...baseArgs, '--', item.file],
@@ -200,6 +201,207 @@ module.exports = {
       this.t('abortMerge'),
       this.t('abortMergeConfirm'),
       () => this.perform(this.t('abortMerge'), () => this.git(['merge', '--abort']))
+    );
+  },
+
+  repoFilePath(file) {
+    const target = this.path.resolve(this.state.repo, file);
+    const repoRoot = this.path.resolve(this.state.repo);
+    const normalizedTarget = this.normalizePath(target);
+    const normalizedRoot = this.normalizePath(repoRoot);
+    if (normalizedTarget !== normalizedRoot && !normalizedTarget.startsWith(`${normalizedRoot}${this.path.sep}`)) {
+      throw new Error(this.t('invalidFilePath', { file }));
+    }
+    return target;
+  },
+
+  splitTextPreserveEnd(value) {
+    const text = String(value || '');
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    const hasFinalEol = text.endsWith('\n');
+    const normalized = text.replace(/\r\n/g, '\n');
+    const lines = normalized.split('\n');
+    if (hasFinalEol) lines.pop();
+    return { lines, eol, hasFinalEol };
+  },
+
+  conflictBlockForLine(lines, lineNumber) {
+    const target = Number(lineNumber);
+    if (!target || target < 1) return null;
+    let start = -1;
+    let separator = -1;
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (line.startsWith('<<<<<<<')) {
+        start = index;
+        separator = -1;
+        continue;
+      }
+      if (start !== -1 && line.startsWith('=======')) {
+        separator = index;
+        continue;
+      }
+      if (start !== -1 && separator !== -1 && line.startsWith('>>>>>>>')) {
+        const end = index;
+        if (target >= start + 1 && target <= end + 1) {
+          let section = 'marker';
+          if (target > start + 1 && target < separator + 1) section = 'ours';
+          else if (target > separator + 1 && target < end + 1) section = 'theirs';
+          return { start, separator, end, section };
+        }
+        start = -1;
+        separator = -1;
+      }
+    }
+    return null;
+  },
+
+  hasConflictMarkers(lines) {
+    return lines.some(line => line.startsWith('<<<<<<<') || line.startsWith('=======') || line.startsWith('>>>>>>>'));
+  },
+
+  conflictChoiceSide(block, action) {
+    if (action === 'acceptCurrent') return block.section === 'theirs' ? 'theirs' : 'ours';
+    if (action === 'discardCurrent') return block.section === 'theirs' ? 'ours' : 'theirs';
+    return action;
+  },
+
+  async applyConflictBlockChoice(file, lineNumber, action) {
+    const target = this.repoFilePath(file);
+    const text = this.fs.readFileSync(target, 'utf8');
+    const parsed = this.splitTextPreserveEnd(text);
+    const block = this.conflictBlockForLine(parsed.lines, lineNumber);
+    if (!block) {
+      this.toast(this.t('noConflictBlockAtLine'), this.COLORS.yellow);
+      return;
+    }
+    const side = this.conflictChoiceSide(block, action);
+    const selected = side === 'ours'
+      ? parsed.lines.slice(block.start + 1, block.separator)
+      : parsed.lines.slice(block.separator + 1, block.end);
+    const nextLines = [
+      ...parsed.lines.slice(0, block.start),
+      ...selected,
+      ...parsed.lines.slice(block.end + 1)
+    ];
+    let nextText = nextLines.join(parsed.eol);
+    if (parsed.hasFinalEol) nextText += parsed.eol;
+    this.fs.writeFileSync(target, nextText, 'utf8');
+    if (!this.hasConflictMarkers(nextLines)) await this.git(['add', '--', file]);
+  },
+
+  conflictLineNumber(meta) {
+    return meta && (meta.newLine || meta.oldLine);
+  },
+
+  acceptCurrentDiffChange(meta) {
+    if (this.detailDiffView && !this.detailDiffView.conflicted) {
+      this.stageCurrentDiffHunk(meta);
+      return;
+    }
+    const file = this.detailDiffView && this.detailDiffView.file;
+    if (!file) return;
+    const line = this.conflictLineNumber(meta);
+    this.hideDiffLineToolbar();
+    this.confirm(
+      this.t('acceptCurrentChange'),
+      this.t('acceptCurrentChangeConfirm', { file, line }),
+      () => this.perform(this.t('acceptCurrentChange'), () => this.applyConflictBlockChoice(file, line, 'acceptCurrent'))
+    );
+  },
+
+  discardCurrentDiffChange(meta) {
+    if (this.detailDiffView && !this.detailDiffView.conflicted) {
+      this.discardCurrentDiffHunk(meta);
+      return;
+    }
+    const file = this.detailDiffView && this.detailDiffView.file;
+    if (!file) return;
+    const line = this.conflictLineNumber(meta);
+    this.hideDiffLineToolbar();
+    this.confirm(
+      this.t('discardCurrentChange'),
+      this.t('discardCurrentChangeConfirm', { file, line }),
+      () => this.perform(this.t('discardCurrentChange'), () => this.applyConflictBlockChoice(file, line, 'discardCurrent'))
+    );
+  },
+
+  gitWithInput(args, input) {
+    if (!this.state.repo) return Promise.reject(new Error(this.t('noRepoSelected')));
+    return new Promise((resolve, reject) => {
+      const child = this.spawn('git', ['-C', this.state.repo, ...args], {
+        windowsHide: true,
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.on('data', chunk => { stdout += chunk.toString('utf8'); });
+      child.stderr.on('data', chunk => { stderr += chunk.toString('utf8'); });
+      child.on('error', reject);
+      child.on('close', code => {
+        if (code === 0) resolve(stdout);
+        else reject(new Error((stderr || stdout || this.t('gitExitCode', { code })).trim().replace(/^fatal: /m, '')));
+      });
+      child.stdin.end(input, 'utf8');
+    });
+  },
+
+  diffHunkPatchForMeta(meta) {
+    const raw = String(this.detailDiffRaw || '');
+    const lines = raw.replace(/\r\n/g, '\n').split('\n');
+    if (lines.length && lines[lines.length - 1] === '') lines.pop();
+    const rawIndex = Number(meta && meta.rawIndex);
+    if (!Number.isInteger(rawIndex) || rawIndex < 0 || rawIndex >= lines.length) {
+      throw new Error(this.t('noDiffHunkAtLine'));
+    }
+    let hunkStart = rawIndex;
+    while (hunkStart >= 0 && !/^@@\s/.test(lines[hunkStart])) hunkStart -= 1;
+    if (hunkStart < 0) throw new Error(this.t('noDiffHunkAtLine'));
+
+    let fileStart = hunkStart;
+    while (fileStart > 0 && !/^diff --git /.test(lines[fileStart - 1])) fileStart -= 1;
+    let hunkEnd = hunkStart + 1;
+    while (hunkEnd < lines.length && !/^@@\s/.test(lines[hunkEnd]) && !/^diff --git /.test(lines[hunkEnd])) hunkEnd += 1;
+
+    const headerLines = lines.slice(fileStart, hunkStart).filter(line => (
+      /^(diff --git |index |--- |\+\+\+ |new file mode|deleted file mode|old mode|new mode|similarity index|rename from|rename to)/.test(line)
+    ));
+    if (!headerLines.some(line => /^--- /.test(line)) || !headerLines.some(line => /^\+\+\+ /.test(line))) {
+      throw new Error(this.t('noDiffHunkAtLine'));
+    }
+    return [...headerLines, ...lines.slice(hunkStart, hunkEnd)].join('\n') + '\n';
+  },
+
+  async refreshDetailDiffAfterHunk() {
+    if (!this.detailDiffView) return;
+    const context = { ...this.detailDiffView };
+    await this.showDetailDiff(context).catch(error => this.toast(this.t('cannotReadDiff', { message: error.message }), this.COLORS.red));
+  },
+
+  async stageCurrentDiffHunk(meta) {
+    if (!this.detailDiffView || this.detailDiffView.staged || this.detailDiffView.conflicted) return;
+    this.hideDiffLineToolbar();
+    await this.perform(this.t('stageDiffHunk'), async () => {
+      const patch = this.diffHunkPatchForMeta(meta);
+      await this.gitWithInput(['apply', '--cached', '--recount', '--whitespace=nowarn', '-'], patch);
+    });
+    await this.refreshDetailDiffAfterHunk();
+  },
+
+  discardCurrentDiffHunk(meta) {
+    if (!this.detailDiffView || this.detailDiffView.staged || this.detailDiffView.conflicted) return;
+    const file = this.detailDiffView.file;
+    this.hideDiffLineToolbar();
+    this.confirm(
+      this.t('discardDiffHunk'),
+      this.t('discardDiffHunkConfirm', { file }),
+      async () => {
+        await this.perform(this.t('discardDiffHunk'), async () => {
+          const patch = this.diffHunkPatchForMeta(meta);
+          await this.gitWithInput(['apply', '--reverse', '--recount', '--whitespace=nowarn', '-'], patch);
+        });
+        await this.refreshDetailDiffAfterHunk();
+      }
     );
   },
 
