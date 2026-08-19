@@ -104,8 +104,8 @@ const addRepoButton = button({ parent: repoPanel, bottom: 1, left: 2, width: 12,
 
 const commitHeader = button({ parent: workPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 提交' });
 const commitMoreButton = button({ parent: workPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
-const commitInput = blessed.textarea({ parent: workPanel, top: 2, left: 2, right: 14, height: 3, mouse: true, inputOnFocus: true, keys: false, tags: false, border: 'line', style: { fg: COLORS.text, bg: '#121925', border: { fg: COLORS.border }, focus: { border: { fg: COLORS.accent } } } });
-const commitButton = button({ parent: workPanel, top: 2, right: 2, width: 11, height: 3, align: 'center', valign: 'middle', content: '提交' });
+const commitInput = blessed.textarea({ parent: workPanel, top: 2, left: 2, right: 8, height: 3, mouse: true, inputOnFocus: true, keys: false, tags: false, border: 'line', style: { fg: COLORS.text, bg: '#121925', border: { fg: COLORS.border }, focus: { border: { fg: COLORS.accent } } } });
+const commitButton = button({ parent: workPanel, top: 2, right: 1, width: 6, height: 3, align: 'center', valign: 'middle', content: '提交' });
 
 const changeHeader = button({ parent: changePanel, top: 1, left: 1, right: 6, height: 1, tags: true, content: '▾ 更改' });
 const iconStyle = { fg: 'brightwhite', bg: COLORS.panel, bold: true };
@@ -130,6 +130,15 @@ function sectionCaption(collapsed, text) {
 function commitInputRows() {
   const lines = commitInput.getValue().split('\n').length;
   return Math.min(10, Math.max(3, lines + 2));
+}
+
+function syncCommitInputScroll() {
+  const visibleRows = Math.max(1, commitInput.height - commitInput.iheight);
+  const lineCount = commitInput.getValue().split('\n').length;
+  const scrollTop = Math.max(0, lineCount - visibleRows);
+  commitInput.childBase = scrollTop;
+  commitInput.childOffset = 0;
+  if (commitInput.lpos) delete commitInput.lpos._scrollBottom;
 }
 
 function reflowLeftPanel() {
@@ -170,6 +179,7 @@ function reflowLeftPanel() {
 function resizeCommitInput() {
   if (state.collapsed.commit) return;
   reflowLeftPanel();
+  syncCommitInputScroll();
   screen.render();
 }
 
@@ -210,13 +220,13 @@ function setBusy(value, label = '') {
   screen.render();
 }
 
-async function perform(label, operation, refresh = true) {
+async function perform(label, operation, refresh = true, options = {}) {
   if (state.busy) return;
   try {
     setBusy(true, label);
     const result = await operation();
     if (refresh) await refreshRepo();
-    toast(`${label}完成`, COLORS.green);
+    if (!options.silentSuccess) toast(`${label}完成`, COLORS.green);
     return result;
   } catch (error) {
     toast(`${label}失败：${error.message}`, COLORS.red);
@@ -466,10 +476,10 @@ function formatDiff(content) {
   }).join('\n');
 }
 
-async function selectRepo(root) {
+async function selectRepo(root, options = {}) {
   state.repo = root;
   state.selected = null;
-  await perform('加载仓库', refreshRepo, false);
+  await perform('加载仓库', refreshRepo, false, options);
 }
 
 async function stage(file) { await perform(`暂存 ${file}`, () => git(['add', '--', file])); }
@@ -688,7 +698,7 @@ screen.key(['C-c'], () => { screen.destroy(); process.exit(0); });
     screen.render();
     return;
   }
-  await selectRepo(state.roots[0]);
+  await selectRepo(state.roots[0], { silentSuccess: true });
 }()).catch(error => {
   detailPanel.setContent(`初始化失败：${error.message}`);
   screen.render();
