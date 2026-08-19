@@ -26,6 +26,7 @@ class GitUiApp {
     this.activeTooltipAnchor = null;
     this.autoRefreshTimer = null;
     this.autoRefreshRunning = false;
+    this.commitInputActive = false;
 
     createLayout(this);
     this.bindEvents();
@@ -41,15 +42,10 @@ class GitUiApp {
     this.commitHeader.on('press', () => this.toggleSection('commit'));
     this.changeHeader.on('press', () => this.toggleSection('changes'));
     this.historyHeader.on('press', () => this.toggleSection('history'));
-    this.commitMoreButton.on('press', () => this.actionMenu(this.commitMoreButton));
-    this.changeMoreButton.on('press', () => this.changesMenu(this.changeMoreButton));
-    this.historyMoreButton.on('press', () => this.historyMenu(this.historyMoreButton));
     this.commitInput.on('keypress', () => setImmediate(() => this.resizeCommitInput()));
-    this.commitInput.on('click', () => this.focusCommitInput());
     this.commitInput.on('focus', () => { this.updateCommitPlaceholder(); this.screen.render(); });
     this.commitInput.on('blur', () => { this.updateCommitPlaceholder(); this.screen.render(); });
-    this.commitPlaceholder.on('click', () => this.focusCommitInput());
-    this.repoAddButton.on('press', () => this.textDialog('添加仓库', '输入 Git 仓库目录的完整路径', async directory => {
+    this.repoAddButton.on('press', () => this.inputDialog('添加仓库', '输入或粘贴 Git 仓库目录的完整路径', async directory => {
       const root = await this.findGitRoot(directory);
       if (!root) { this.toast('该目录不是 Git 仓库', this.COLORS.red); return; }
       if (!this.state.roots.includes(root)) this.state.roots.push(root);
@@ -58,8 +54,10 @@ class GitUiApp {
     this.commitButton.on('press', () => this.handleCommitButton());
 
     this.screen.on('resize', () => { this.reflowLeftPanel(); this.screen.render(); });
+    this.screen.on('mouse', data => this.activateCommitInputIfInside(data));
     this.screen.on('mouse', data => this.releaseCommitInputIfOutside(data));
     this.screen.on('mouse', data => this.handleScrollableWheel(data));
+    this.screen.on('keypress', (ch, key) => this.handleCommitInputKey(ch, key));
     this.screen.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
     process.on('uncaughtException', error => this.reportUnhandledError(error));
     process.on('unhandledRejection', error => this.reportUnhandledError(error));

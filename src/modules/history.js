@@ -117,7 +117,6 @@ module.exports = {
     const remoteNames = remoteBranches.filter(name => name.includes('/'));
     if (remoteNames.length) lines.push(`远程分支：${remoteNames.join(', ')}`);
     if (data.refs) lines.push(`引用：${data.refs}`);
-    lines.push('操作：左键展开/收起文件列表，右键打开提交菜单');
     lines.push('');
     lines.push('提交内容：');
     lines.push(...String(data.message || '(无提交内容)').split(/\r?\n/));
@@ -136,7 +135,7 @@ module.exports = {
   remoteBranchMarker(remoteBranches) {
     const branchNames = remoteBranches.filter(name => name.includes('/'));
     if (!branchNames.length) return '';
-    const label = `☁ ${branchNames.join(', ')}`;
+    const label = `☁  ${branchNames.join(', ')}`;
     return label.length > 30 ? `${label.slice(0, 29)}…` : label;
   },
 

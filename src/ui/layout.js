@@ -52,7 +52,6 @@ function createLayout(app) {
   app.repoContent = blessed.box({ parent: app.repoArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
   app.commitHeader = app.button({ parent: app.workPanel, top: 0, left: 2, width: 8, height: 1, tags: true, content: ' ▾ 提交 ' });
-  app.commitMoreButton = app.button({ parent: app.workPanel, top: 0, right: 1, width: 6, height: 1, content: '...' });
   app.commitInput = blessed.textarea({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, inputOnFocus: false, keys: false, tags: false, style: { fg: COLORS.text, bg: COLORS.panel, focus: { fg: COLORS.text, bg: COLORS.panel } } });
   app.commitPlaceholder = blessed.box({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, tags: false, content: '鼠标点击这里输入提交内容，回车换行', style: { fg: COLORS.dim, bg: COLORS.panel } });
   app.commitButton = app.button({
@@ -75,12 +74,10 @@ function createLayout(app) {
   });
 
   app.changeHeader = app.button({ parent: app.changePanel, top: 0, left: 2, width: 8, height: 1, tags: true, content: ' ▾ 更改 ' });
-  app.changeMoreButton = app.button({ parent: app.changePanel, top: 0, right: 1, width: 4, height: 1, content: '...' });
   app.changeArea = blessed.box({ parent: app.changePanel, top: 1, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.changeContent = blessed.box({ parent: app.changeArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
   app.historyHeader = app.button({ parent: app.historyPanel, top: 0, left: 2, width: 12, height: 1, tags: true, content: ' ▾ 提交历史 ' });
-  app.historyMoreButton = app.button({ parent: app.historyPanel, top: 0, right: 1, width: 6, height: 1, content: '...' });
   app.historyArea = blessed.box({ parent: app.historyPanel, top: 1, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.historyContent = blessed.box({ parent: app.historyArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 }

@@ -517,7 +517,7 @@ module.exports = {
 
   showMenu(title, entries, anchor) {
     this.closeDropdownMenu();
-    const visibleEntries = entries.slice(0, 18);
+    const visibleEntries = entries.slice(0, 24);
     const width = Math.min(64, Math.max(18, this.textWidth(title) + 6, ...visibleEntries.map(entry => this.textWidth(entry.label) + 4)));
     const height = Math.max(3, visibleEntries.length + 2);
     const position = this.anchorPosition(anchor, width, height);
@@ -532,6 +532,31 @@ module.exports = {
     });
     this.activeDropdownMenu = modal;
     visibleEntries.forEach((entry, index) => {
+      if (entry.type === 'separator') {
+        this.blessed.box({
+          parent: modal,
+          top: index + 1,
+          left: 1,
+          right: 1,
+          height: 1,
+          content: '─'.repeat(Math.max(1, width - 4)),
+          style: { fg: this.COLORS.border, bg: this.COLORS.panel }
+        });
+        return;
+      }
+      if (entry.type === 'header') {
+        this.blessed.box({
+          parent: modal,
+          top: index + 1,
+          left: 1,
+          right: 1,
+          height: 1,
+          tags: true,
+          content: `{cyan-fg}${this.escapeTags(entry.label)}{/cyan-fg}`,
+          style: { fg: this.COLORS.accent, bg: this.COLORS.panel, bold: true }
+        });
+        return;
+      }
       const item = this.button({
         parent: modal,
         top: index + 1,
