@@ -46,20 +46,21 @@ function createLayout(app) {
   screen.append(app.leftPanel);
   app.screenExitButton = app.button({ parent: screen, top: 0, right: 1, width: 6, height: 1, content: '退出', align: 'center', style: { fg: COLORS.text, bg: COLORS.panel, hover: { fg: COLORS.red, bg: COLORS.panelAlt } } });
 
-  app.repoHeader = app.button({ parent: app.repoPanel, top: 1, left: 1, right: 5, height: 1, tags: true, content: '▾ 存储库' });
-  app.repoAddButton = app.button({ parent: app.repoPanel, top: 1, right: 1, width: 3, height: 1, content: '+', style: app.iconStyle });
-  app.repoArea = blessed.box({ parent: app.repoPanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+  app.repoHeader = app.button({ parent: app.repoPanel, top: 0, left: 2, width: 10, height: 1, tags: true, content: ' ▾ 存储库 ' });
+  app.repoAddButton = app.button({ parent: app.repoPanel, top: 0, right: 1, width: 3, height: 1, content: '+', style: app.iconStyle });
+  app.repoArea = blessed.box({ parent: app.repoPanel, top: 1, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.repoContent = blessed.box({ parent: app.repoArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
-  app.commitHeader = app.button({ parent: app.workPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 提交' });
-  app.commitMoreButton = app.button({ parent: app.workPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
-  app.commitInput = blessed.textarea({ parent: app.workPanel, top: 2, left: 2, right: 8, height: 3, mouse: true, inputOnFocus: true, keys: false, tags: false, border: 'line', style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border }, focus: { border: { fg: COLORS.accent } } } });
+  app.commitHeader = app.button({ parent: app.workPanel, top: 0, left: 2, width: 8, height: 1, tags: true, content: ' ▾ 提交 ' });
+  app.commitMoreButton = app.button({ parent: app.workPanel, top: 0, right: 1, width: 6, height: 1, content: '...' });
+  app.commitInput = blessed.textarea({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, inputOnFocus: false, keys: false, tags: false, style: { fg: COLORS.text, bg: COLORS.panel, focus: { fg: COLORS.text, bg: COLORS.panel } } });
+  app.commitPlaceholder = blessed.box({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, tags: false, content: '鼠标点击这里输入提交内容，回车换行', style: { fg: COLORS.dim, bg: COLORS.panel } });
   app.commitButton = app.button({
     parent: app.workPanel,
-    top: 2,
+    top: 1,
     right: 1,
     width: 6,
-    height: 3,
+    height: 1,
     shrink: false,
     align: 'center',
     valign: 'middle',
@@ -73,14 +74,14 @@ function createLayout(app) {
     }
   });
 
-  app.changeHeader = app.button({ parent: app.changePanel, top: 1, left: 1, right: 6, height: 1, tags: true, content: '▾ 更改' });
-  app.changeMoreButton = app.button({ parent: app.changePanel, top: 1, right: 1, width: 4, height: 1, content: '...' });
-  app.changeArea = blessed.box({ parent: app.changePanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+  app.changeHeader = app.button({ parent: app.changePanel, top: 0, left: 2, width: 8, height: 1, tags: true, content: ' ▾ 更改 ' });
+  app.changeMoreButton = app.button({ parent: app.changePanel, top: 0, right: 1, width: 4, height: 1, content: '...' });
+  app.changeArea = blessed.box({ parent: app.changePanel, top: 1, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.changeContent = blessed.box({ parent: app.changeArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
-  app.historyHeader = app.button({ parent: app.historyPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 提交历史' });
-  app.historyMoreButton = app.button({ parent: app.historyPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
-  app.historyArea = blessed.box({ parent: app.historyPanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+  app.historyHeader = app.button({ parent: app.historyPanel, top: 0, left: 2, width: 12, height: 1, tags: true, content: ' ▾ 提交历史 ' });
+  app.historyMoreButton = app.button({ parent: app.historyPanel, top: 0, right: 1, width: 6, height: 1, content: '...' });
+  app.historyArea = blessed.box({ parent: app.historyPanel, top: 1, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.historyContent = blessed.box({ parent: app.historyArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 }
 

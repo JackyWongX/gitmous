@@ -41,9 +41,7 @@ module.exports = {
         }
         this.toggleCommitFiles(commit);
       });
-      if (this.shouldShowCommitTooltip(commit, rightMarker)) {
-        this.bindTooltip(commitButton, () => this.commitTooltipText(commit, remoteBranches, index === 0), { delay: 350 });
-      }
+      this.bindTooltip(commitButton, () => this.commitTooltipText(commit, remoteBranches, index === 0), { delay: 300 });
       row += 1;
       if (!expanded) return;
 
@@ -82,21 +80,47 @@ module.exports = {
     this.resetScrollable(this.historyArea);
   },
 
-  shouldShowCommitTooltip(commit, rightMarker) {
-    return Boolean(rightMarker) || this.textWidth(commit.subject || '') > 36;
+  async commitTooltipData(commit) {
+    const key = commit.fullHash || commit.hash;
+    if (!this.commitTooltipCache) this.commitTooltipCache = new Map();
+    if (this.commitTooltipCache.has(key)) return this.commitTooltipCache.get(key);
+    const raw = await this.git([
+      'show',
+      '-s',
+      '--date=iso-strict',
+      '--format=%H%x1f%h%x1f%an%x1f%ae%x1f%ad%x1f%D%x1f%B',
+      key
+    ]).catch(() => '');
+    const parts = raw.split('\x1f');
+    const data = {
+      fullHash: (parts[0] || commit.fullHash || '').trim(),
+      shortHash: (parts[1] || commit.hash || '').trim(),
+      author: (parts[2] || commit.author || '').trim(),
+      email: (parts[3] || '').trim(),
+      date: (parts[4] || commit.date || '').trim(),
+      refs: (parts[5] || '').trim(),
+      message: parts.slice(6).join('\x1f').trim() || commit.subject || '(无提交内容)'
+    };
+    this.commitTooltipCache.set(key, data);
+    return data;
   },
 
-  commitTooltipText(commit, remoteBranches, isLatestCommit) {
+  async commitTooltipText(commit, remoteBranches, isLatestCommit) {
+    const data = await this.commitTooltipData(commit);
     const lines = [
-      `提交：${commit.fullHash || commit.hash}`,
-      `作者：${commit.author || '未知'}`,
-      `日期：${commit.date || '未知'}`
+      `完整 hash：${data.fullHash || commit.fullHash || commit.hash}`,
+      `短 hash：${data.shortHash || commit.hash}`,
+      `作者：${data.email ? `${data.author} <${data.email}>` : (data.author || '未知')}`,
+      `日期：${data.date || '未知'}`
     ];
-    const branchName = this.latestBranchMarker(isLatestCommit).replace(/\{\/?[^}]+}/g, '');
-    if (branchName) lines.push(`本地分支：${branchName}`);
+    if (isLatestCommit && this.state.branch && this.state.branch !== '(分离 HEAD)') lines.push(`当前分支：@${this.state.branch}`);
     const remoteNames = remoteBranches.filter(name => name.includes('/'));
     if (remoteNames.length) lines.push(`远程分支：${remoteNames.join(', ')}`);
-    lines.push(`内容：${commit.subject || '(无提交内容)'}`);
+    if (data.refs) lines.push(`引用：${data.refs}`);
+    lines.push('操作：左键展开/收起文件列表，右键打开提交菜单');
+    lines.push('');
+    lines.push('提交内容：');
+    lines.push(...String(data.message || '(无提交内容)').split(/\r?\n/));
     return lines.join('\n');
   },
 

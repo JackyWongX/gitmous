@@ -45,6 +45,10 @@ class GitUiApp {
     this.changeMoreButton.on('press', () => this.changesMenu(this.changeMoreButton));
     this.historyMoreButton.on('press', () => this.historyMenu(this.historyMoreButton));
     this.commitInput.on('keypress', () => setImmediate(() => this.resizeCommitInput()));
+    this.commitInput.on('click', () => this.focusCommitInput());
+    this.commitInput.on('focus', () => { this.updateCommitPlaceholder(); this.screen.render(); });
+    this.commitInput.on('blur', () => { this.updateCommitPlaceholder(); this.screen.render(); });
+    this.commitPlaceholder.on('click', () => this.focusCommitInput());
     this.repoAddButton.on('press', () => this.textDialog('添加仓库', '输入 Git 仓库目录的完整路径', async directory => {
       const root = await this.findGitRoot(directory);
       if (!root) { this.toast('该目录不是 Git 仓库', this.COLORS.red); return; }

@@ -218,7 +218,7 @@ module.exports = {
     this.screen.render();
   },
 
-  tooltipLines(text, maxWidth) {
+  tooltipLines(text, maxWidth, maxLines = 18) {
     const rawLines = String(text || '').split(/\r?\n/);
     const lines = [];
     rawLines.forEach(rawLine => {
@@ -237,7 +237,9 @@ module.exports = {
       }
       lines.push(current);
     });
-    return lines.length ? lines.slice(0, 8) : [''];
+    if (!lines.length) return [''];
+    if (lines.length <= maxLines) return lines;
+    return [...lines.slice(0, Math.max(1, maxLines - 1)), '…'];
   },
 
   hideTooltip(anchor = null) {
@@ -259,8 +261,9 @@ module.exports = {
     this.hideTooltip();
     const screenWidth = this.screen.width || 80;
     const screenHeight = this.screen.height || 24;
-    const maxContentWidth = Math.max(16, Math.min(56, screenWidth - 6));
-    const lines = this.tooltipLines(value, maxContentWidth);
+    const maxContentWidth = Math.max(16, Math.min(72, screenWidth - 6));
+    const maxLines = Math.max(4, screenHeight - 4);
+    const lines = this.tooltipLines(value, maxContentWidth, maxLines);
     const contentWidth = Math.max(...lines.map(line => this.textWidth(line)), 8);
     const width = Math.min(screenWidth - 2, contentWidth + 4);
     const height = Math.min(screenHeight - 2, lines.length + 2);
@@ -287,28 +290,39 @@ module.exports = {
     const delay = Number(options.delay || 250);
     let timer = null;
     const resolveText = data => (typeof textOrFactory === 'function' ? textOrFactory(data) : textOrFactory);
+    let hoverActive = false;
+    let requestId = 0;
     const clearTimer = () => {
       if (timer) clearTimeout(timer);
       timer = null;
     };
     element.on('mouseover', data => {
+      hoverActive = true;
       clearTimer();
-      timer = setTimeout(() => {
+      timer = setTimeout(async () => {
         timer = null;
         if (!element.parent || element.detached || element.destroyed) return;
-        const text = resolveText(data);
+        const currentRequestId = ++requestId;
+        const text = await Promise.resolve(resolveText(data)).catch(error => `无法读取提示内容：${error.message}`);
+        if (!hoverActive || currentRequestId !== requestId || !element.parent || element.detached || element.destroyed) return;
         this.showTooltip(text, element);
       }, delay);
     });
     element.on('mouseout', () => {
+      hoverActive = false;
+      requestId += 1;
       clearTimer();
       this.hideTooltip(element);
     });
     element.on('press', () => {
+      hoverActive = false;
+      requestId += 1;
       clearTimer();
       this.hideTooltip(element);
     });
     element.on('click', () => {
+      hoverActive = false;
+      requestId += 1;
       clearTimer();
       this.hideTooltip(element);
     });

@@ -3,7 +3,7 @@
 module.exports = {
   commitInputRows() {
     const lines = this.commitInput.getValue().split('\n').length;
-    return Math.min(10, Math.max(3, lines + 2));
+    return Math.min(10, Math.max(1, lines));
   },
 
   hasAnyChanges() {
@@ -34,6 +34,8 @@ module.exports = {
     this.commitButton.setContent(action.label);
     this.commitInput.left = inputLeft;
     this.commitInput.right = buttonRight + width + gap;
+    this.commitPlaceholder.left = this.commitInput.left;
+    this.commitPlaceholder.right = this.commitInput.right;
   },
 
   syncCommitInputScroll() {
@@ -45,15 +47,36 @@ module.exports = {
     if (this.commitInput.lpos) delete this.commitInput.lpos._scrollBottom;
   },
 
+  updateSectionHeader(element, section, text) {
+    const content = ` ${this.sectionCaption(this.state.collapsed[section], text)} `;
+    element.setContent(content);
+    element.width = this.textWidth(content) + 1;
+  },
+
+  updateCommitPlaceholder() {
+    const hasValue = Boolean(this.commitInput.getValue());
+    const isFocused = this.screen.focused === this.commitInput || Boolean(this.commitInput._reading);
+    const visible = !this.state.collapsed.commit && !hasValue && !isFocused;
+    this.setVisible(this.commitPlaceholder, visible);
+  },
+
+  focusCommitInput() {
+    this.commitPlaceholder.hide();
+    this.commitInput.focus();
+    if (!this.commitInput._reading) this.commitInput.readInput();
+    this.screen.render();
+  },
+
   reflowLeftPanel() {
     const rows = Math.max(22, this.screen.height || 24);
     const startActions = this.state.startDirectoryIsGit ? 0 : 2;
     const repoRows = Math.min(8, Math.max(1, this.state.roots.length + startActions));
-    const repoHeight = this.state.collapsed.repositories ? 3 : repoRows + 3;
+    const collapsedHeight = 2;
+    const repoHeight = this.state.collapsed.repositories ? collapsedHeight : repoRows + 2;
     const inputHeight = this.commitInputRows();
-    const commitHeight = this.state.collapsed.commit ? 3 : inputHeight + 3;
-    const historyHeight = this.state.collapsed.history ? 3 : Math.max(6, Math.floor(rows * 0.34));
-    const changeHeight = this.state.collapsed.changes ? 3 : Math.max(5, rows - repoHeight - commitHeight - historyHeight);
+    const commitHeight = this.state.collapsed.commit ? collapsedHeight : inputHeight + 2;
+    const historyHeight = this.state.collapsed.history ? collapsedHeight : Math.max(6, Math.floor(rows * 0.34));
+    const changeHeight = this.state.collapsed.changes ? collapsedHeight : Math.max(5, rows - repoHeight - commitHeight - historyHeight);
     const actualHistoryHeight = this.state.collapsed.changes ? rows - repoHeight - commitHeight - changeHeight : historyHeight;
     let top = 0;
     this.repoPanel.top = top;
@@ -63,6 +86,7 @@ module.exports = {
     this.workPanel.height = commitHeight;
     this.updateCommitButton();
     this.commitInput.height = inputHeight;
+    this.commitPlaceholder.height = inputHeight;
     this.commitButton.height = inputHeight;
     top += commitHeight;
     this.changePanel.top = top;
@@ -71,14 +95,15 @@ module.exports = {
     this.historyPanel.top = top;
     this.historyPanel.height = Math.max(1, actualHistoryHeight);
 
-    this.repoHeader.setContent(this.sectionCaption(this.state.collapsed.repositories, '存储库'));
-    this.commitHeader.setContent(this.sectionCaption(this.state.collapsed.commit, '提交'));
-    this.changeHeader.setContent(this.sectionCaption(this.state.collapsed.changes, '更改'));
-    this.historyHeader.setContent(this.sectionCaption(this.state.collapsed.history, '提交历史'));
+    this.updateSectionHeader(this.repoHeader, 'repositories', '存储库');
+    this.updateSectionHeader(this.commitHeader, 'commit', '提交');
+    this.updateSectionHeader(this.changeHeader, 'changes', '更改');
+    this.updateSectionHeader(this.historyHeader, 'history', '提交历史');
     this.setVisible(this.repoAddButton, !this.state.collapsed.repositories);
     this.setVisible(this.repoArea, !this.state.collapsed.repositories);
     this.setVisible(this.commitInput, !this.state.collapsed.commit);
     this.setVisible(this.commitButton, !this.state.collapsed.commit);
+    this.updateCommitPlaceholder();
     this.setVisible(this.changeArea, !this.state.collapsed.changes);
     this.setVisible(this.historyArea, !this.state.collapsed.history);
   },
@@ -106,6 +131,8 @@ module.exports = {
     }
     this.screen.grabKeys = false;
     this.screen.program.hideCursor();
+    this.updateCommitPlaceholder();
+    this.screen.render();
   },
 
   handleCommitButton() {
@@ -123,7 +150,7 @@ module.exports = {
       return;
     }
     const message = this.commitInput.getValue().trim();
-    if (!message) { this.toast('请输入提交消息', this.COLORS.yellow); this.commitInput.focus(); this.screen.render(); return; }
+    if (!message) { this.toast('请输入提交消息', this.COLORS.yellow); this.focusCommitInput(); return; }
     this.runUiAction(() => this.perform('提交', async () => {
       if (!this.state.status.staged.length) await this.git(['add', '-A']);
       await this.git(['commit', '-m', message]);
