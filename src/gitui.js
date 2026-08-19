@@ -22,6 +22,11 @@ const screen = blessed.screen({
   dockBorders: true,
   autoPadding: false
 });
+const rawScreenRender = screen.render.bind(screen);
+screen.render = function renderWithCleanTree() {
+  sanitizeTree(screen);
+  return rawScreenRender();
+};
 
 // 显式启用现代终端支持的 SGR 鼠标协议，避免依赖 TERM 的自动探测结果。
 screen.program.setMouse({ vt200Mouse: true, sgrMouse: true, utfMouse: true, cellMotion: true }, true);
@@ -35,6 +40,8 @@ const state = {
   remote: '',
   status: { staged: [], unstaged: [], untracked: [] },
   history: [],
+  expandedHistory: new Set(),
+  historyFiles: new Map(),
   selected: null,
   busy: false,
   collapsed: {
@@ -99,6 +106,7 @@ const detailPanel = box({ left: '42%', top: 0, right: 0, bottom: 0, border: regi
 const footer = blessed.box({ left: 0, bottom: 0, width: '100%', height: 2, tags: true, style: { fg: COLORS.dim, bg: '#111a28' }, content: ' 鼠标点击所有操作 · 提交消息可直接键盘输入 · 破坏性操作会要求确认' });
 screen.append(detailPanel);
 screen.append(leftPanel);
+const screenExitButton = button({ parent: screen, top: 0, right: 1, width: 6, height: 1, content: '退出', align: 'center', style: { fg: COLORS.text, bg: COLORS.panel, hover: { fg: COLORS.red, bg: COLORS.panelAlt } } });
 
 const iconStyle = { fg: 'brightwhite', bg: COLORS.panel, bold: true };
 const repoHeader = button({ parent: repoPanel, top: 1, left: 1, right: 5, height: 1, tags: true, content: '▾ 存储库' });
@@ -117,9 +125,10 @@ const changeMoreButton = button({ parent: changePanel, top: 1, right: 1, width: 
 const changeArea = blessed.box({ parent: changePanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
 const changeContent = blessed.box({ parent: changeArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
-const historyHeader = button({ parent: historyPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 图表' });
+const historyHeader = button({ parent: historyPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 提交历史' });
 const historyMoreButton = button({ parent: historyPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
-const historyList = blessed.list({ parent: historyPanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, tags: true, keys: false, style: { selected: { bg: '#2b607b', fg: COLORS.text }, item: { fg: COLORS.text } }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+const historyArea = blessed.box({ parent: historyPanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+const historyContent = blessed.box({ parent: historyArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
 function setVisible(element, visible) {
   if (visible) element.show();
@@ -171,13 +180,13 @@ function reflowLeftPanel() {
   repoHeader.setContent(sectionCaption(state.collapsed.repositories, '存储库'));
   commitHeader.setContent(sectionCaption(state.collapsed.commit, '提交'));
   changeHeader.setContent(sectionCaption(state.collapsed.changes, '更改'));
-  historyHeader.setContent(sectionCaption(state.collapsed.history, '图表'));
+  historyHeader.setContent(sectionCaption(state.collapsed.history, '提交历史'));
   setVisible(repoAddButton, !state.collapsed.repositories);
   setVisible(repoArea, !state.collapsed.repositories);
   setVisible(commitInput, !state.collapsed.commit);
   setVisible(commitButton, !state.collapsed.commit);
   setVisible(changeArea, !state.collapsed.changes);
-  setVisible(historyList, !state.collapsed.history);
+  setVisible(historyArea, !state.collapsed.history);
 }
 
 function resizeCommitInput() {
@@ -382,6 +391,17 @@ function statusMarker(code) {
   return { label: 'M', tag: 'yellow-fg' };
 }
 
+function parseCommitFiles(raw) {
+  return String(raw || '').split(/\r?\n/).filter(Boolean).map(line => {
+    const parts = line.split('\t');
+    const status = parts[0] || 'M';
+    if (status.startsWith('R') || status.startsWith('C')) {
+      return { status, oldFile: parts[1] || '', file: parts[2] || parts[1] || '' };
+    }
+    return { status, file: parts[1] || '' };
+  }).filter(item => item.file);
+}
+
 function unregisterTree(element) {
   if (!element || !element.screen) return;
   const removeFrom = list => {
@@ -394,6 +414,16 @@ function unregisterTree(element) {
   removeFrom(element.screen.clickable || []);
   removeFrom(element.screen.keyable || []);
   [...element.children].forEach(unregisterTree);
+}
+
+function sanitizeTree(element) {
+  if (!element || !element.children) return;
+  element.children = element.children.filter(child => {
+    const keep = child && child.parent === element && !child.detached && !child.destroyed;
+    if (!keep) unregisterTree(child);
+    return keep;
+  });
+  element.children.forEach(sanitizeTree);
 }
 
 function clearScreenMouseRefs(element) {
@@ -441,8 +471,12 @@ function closeDropdownMenu() {
 
 function clearChildren(element) {
   clearScreenMouseRefs(element);
-  [...element.children].forEach(disposeTree);
+  const children = [...element.children];
   element.children.length = 0;
+  children.forEach(child => {
+    child.parent = null;
+    disposeTree(child);
+  });
   resetScrollable(element);
 }
 
@@ -478,6 +512,18 @@ function pointInside(element, data) {
   const pos = element && (element.lpos || element._getCoords());
   if (!pos || data.x == null || data.y == null) return false;
   return data.x >= pos.xi && data.x < pos.xl && data.y >= pos.yi && data.y < pos.yl;
+}
+
+function releaseCommitInputIfOutside(data) {
+  if (!data || data.action !== 'mousedown' || pointInside(commitInput, data)) return;
+  if (commitInput._reading && typeof commitInput._done === 'function') {
+    commitInput._done('stop');
+  }
+  if (screen.focused === commitInput) {
+    screen.rewindFocus();
+  }
+  screen.grabKeys = false;
+  screen.program.hideCursor();
 }
 
 function isLiveRowState(rowState) {
@@ -588,14 +634,65 @@ function renderChanges() {
 }
 
 function renderHistory() {
-  historyList.setItems(state.history.map(commit => `{cyan-fg}${escapeTags(commit.hash)}{/cyan-fg} {bold}${escapeTags(commit.subject)}{/bold}\n{gray-fg}${escapeTags(commit.date)} · ${escapeTags(commit.author)}{/gray-fg}`));
+  clearChildren(historyContent);
+  let row = 0;
+  state.history.forEach(commit => {
+    const expanded = state.expandedHistory.has(commit.hash);
+    const commitButton = button({
+      parent: historyContent,
+      top: row,
+      left: 0,
+      right: 0,
+      height: 1,
+      shrink: false,
+      tags: true,
+      padding: { left: 0, right: 0 },
+      content: `${expanded ? '▾' : '▸'} {cyan-fg}${escapeTags(commit.hash)}{/cyan-fg} ${escapeTags(commit.subject)}`,
+      style: { fg: COLORS.text, bg: COLORS.panel, hover: { fg: COLORS.text, bg: COLORS.panelAlt } }
+    });
+    commitButton.on('press', () => toggleCommitFiles(commit));
+    row += 1;
+    if (!expanded) return;
+
+    const files = state.historyFiles.get(commit.hash);
+    if (files == null) {
+      blessed.box({ parent: historyContent, top: row, left: 2, right: 0, height: 1, tags: true, content: '{gray-fg}加载文件列表...{/gray-fg}', style: { fg: COLORS.dim, bg: COLORS.panel } });
+      row += 1;
+      return;
+    }
+    if (!files.length) {
+      blessed.box({ parent: historyContent, top: row, left: 2, right: 0, height: 1, tags: true, content: '{gray-fg}没有文件变更{/gray-fg}', style: { fg: COLORS.dim, bg: COLORS.panel } });
+      row += 1;
+      return;
+    }
+    files.forEach(fileItem => {
+      const marker = statusMarker(fileItem.status);
+      const renameText = fileItem.oldFile ? ` {gray-fg}${escapeTags(fileItem.oldFile)} →{/gray-fg}` : '';
+      const fileButton = button({
+        parent: historyContent,
+        top: row,
+        left: 2,
+        right: 0,
+        height: 1,
+        shrink: false,
+        tags: true,
+        padding: { left: 0, right: 0 },
+        content: `{${marker.tag}}${marker.label}{/${marker.tag}}  ${escapeTags(fileItem.file)}${renameText}`,
+        style: { fg: COLORS.text, bg: COLORS.panel, hover: { fg: COLORS.text, bg: COLORS.panelAlt } }
+      });
+      fileButton.on('press', () => showCommitFileDiff(commit, fileItem));
+      row += 1;
+    });
+  });
+  historyContent.height = Math.max(1, row);
+  resetScrollable(historyArea);
 }
 
 function renderAll() {
   renderRepositories();
   renderChanges();
   renderHistory();
-  if (!state.selected) detailPanel.setContent(' 点击文件可查看差异，点击历史可查看提交详情。');
+  if (!state.selected) detailPanel.setContent(' 点击更改文件可查看工作区差异；点击提交可展开文件列表，再点击文件查看该提交的修改对比。');
   screen.render();
 }
 
@@ -614,6 +711,8 @@ function formatDiff(content) {
 async function selectRepo(root, options = {}) {
   state.repo = root;
   state.selected = null;
+  state.expandedHistory.clear();
+  state.historyFiles.clear();
   await perform('加载仓库', refreshRepo, false, options);
 }
 
@@ -623,10 +722,15 @@ async function unstage(file) {
 }
 
 function confirm(title, text, onConfirm) {
-  const modal = box({ parent: screen, top: 'center', left: 'center', width: 58, height: 9, label: ` ${title} `, style: { fg: COLORS.text, bg: '#182235', border: { fg: COLORS.yellow } } });
-  blessed.box({ parent: modal, top: 1, left: 2, right: 2, height: 3, tags: true, content: escapeTags(text), style: { fg: COLORS.text, bg: '#182235' } });
-  const yes = button({ parent: modal, bottom: 1, left: 12, width: 12, content: '确认', align: 'center' });
-  const no = button({ parent: modal, bottom: 1, right: 12, width: 12, content: '取消', align: 'center' });
+  const lines = String(text || '').split(/\r?\n/);
+  const contentHeight = Math.min(12, Math.max(1, lines.length));
+  const contentWidth = Math.max(...lines.map(line => textWidth(line)), textWidth(title), 12);
+  const width = Math.min(Math.max(34, contentWidth + 6), Math.max(34, screen.width - 4));
+  const height = Math.min(contentHeight + 5, Math.max(7, screen.height - 2));
+  const modal = box({ parent: screen, top: 'center', left: 'center', width, height, label: ` ${title} `, style: { fg: COLORS.text, bg: '#182235', border: { fg: COLORS.yellow } } });
+  blessed.box({ parent: modal, top: 1, left: 2, right: 2, bottom: 3, scrollable: true, alwaysScroll: true, tags: true, content: escapeTags(text), style: { fg: COLORS.text, bg: '#182235' }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+  const yes = button({ parent: modal, bottom: 1, left: Math.max(2, Math.floor(width * 0.25) - 4), width: 8, content: '确认', align: 'center' });
+  const no = button({ parent: modal, bottom: 1, right: Math.max(2, Math.floor(width * 0.25) - 4), width: 8, content: '取消', align: 'center' });
   yes.on('press', () => { destroyElement(modal); runUiAction(onConfirm, title); screen.render(); });
   no.on('press', () => { destroyElement(modal); screen.render(); });
   screen.render();
@@ -721,6 +825,35 @@ async function showCommit(commit) {
   const detail = await git(['show', '--stat', '--patch', '--decorate=short', commit.hash]).catch(error => `无法读取提交：${error.message}`);
   detailPanel.setLabel(` 提交：${commit.hash} `);
   detailPanel.setContent(formatDiff(detail));
+  detailPanel.setScroll(0);
+  screen.render();
+}
+
+async function toggleCommitFiles(commit) {
+  if (state.expandedHistory.has(commit.hash)) {
+    state.expandedHistory.delete(commit.hash);
+    renderHistory();
+    screen.render();
+    return;
+  }
+  state.expandedHistory.add(commit.hash);
+  if (!state.historyFiles.has(commit.hash)) {
+    state.historyFiles.set(commit.hash, null);
+    renderHistory();
+    screen.render();
+    const raw = await git(['show', '--name-status', '--format=', '--find-renames', commit.hash]).catch(() => '');
+    state.historyFiles.set(commit.hash, parseCommitFiles(raw));
+  }
+  renderHistory();
+  screen.render();
+}
+
+async function showCommitFileDiff(commit, fileItem) {
+  state.selected = `${commit.hash}:${fileItem.file}`;
+  const paths = fileItem.oldFile ? [fileItem.oldFile, fileItem.file] : [fileItem.file];
+  const diff = await git(['show', '--format=', '--patch', '--find-renames', commit.hash, '--', ...paths]).catch(error => `无法读取差异：${error.message}`);
+  detailPanel.setLabel(` ${commit.hash}：${fileItem.file} `);
+  detailPanel.setContent(formatDiff(diff || '没有可显示的文本差异。'));
   detailPanel.setScroll(0);
   screen.render();
 }
@@ -831,7 +964,7 @@ function changesMenu(anchor) {
 }
 
 function historyMenu(anchor) {
-  showMenu('图表', [
+  showMenu('提交历史', [
     { label: '刷新提交历史', action: () => perform('刷新历史', refreshRepo, false) },
     { label: '查看当前分支日志', action: async () => { const log = await git(['log', '--graph', '--decorate', '--oneline', '-n', '180']); detailPanel.setLabel(' 当前分支图表 '); detailPanel.setContent(formatDiff(log)); detailPanel.setScroll(0); screen.render(); } },
     { label: '打开 Git 操作菜单', action: menuAnchor => actionMenu(menuAnchor) }
@@ -845,10 +978,10 @@ function discardAllChanges() {
   }));
 }
 
-historyList.on('select', (_, index) => { if (state.history[index]) showCommit(state.history[index]); });
 refreshButton.on('press', () => perform('刷新', refreshRepo, false));
 actionButton.on('press', () => actionMenu(actionButton));
 exitButton.on('press', () => { screen.destroy(); process.exit(0); });
+screenExitButton.on('press', () => { screen.destroy(); process.exit(0); });
 repoHeader.on('press', () => toggleSection('repositories'));
 commitHeader.on('press', () => toggleSection('commit'));
 changeHeader.on('press', () => toggleSection('changes'));
@@ -867,10 +1000,11 @@ commitButton.on('press', () => {
   const message = commitInput.getValue().trim();
   if (!message) { toast('请输入提交消息', COLORS.yellow); commitInput.focus(); screen.render(); return; }
   if (!state.status.staged.length) { toast('没有已暂存的更改', COLORS.yellow); return; }
-  confirm('创建提交', `使用以下提交消息：\n${message}`, () => perform('提交', async () => { await git(['commit', '-m', message]); commitInput.clearValue(); resizeCommitInput(); }));
+  confirm('创建提交', message, () => perform('提交', async () => { await git(['commit', '-m', message]); commitInput.clearValue(); resizeCommitInput(); }));
 });
 
 screen.on('resize', () => { reflowLeftPanel(); screen.render(); });
+screen.on('mouse', releaseCommitInputIfOutside);
 screen.key(['C-c'], () => { screen.destroy(); process.exit(0); });
 process.on('uncaughtException', reportUnhandledError);
 process.on('unhandledRejection', reportUnhandledError);
