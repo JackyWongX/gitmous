@@ -18,7 +18,7 @@ module.exports = {
         height: 1,
         tags: true,
         mouse: true,
-        content: `${expanded ? '▾' : '▸'} {cyan-fg}${this.escapeTags(commit.hash)}{/cyan-fg} ${this.escapeTags(commit.subject)}`,
+        content: `${expanded ? '▾' : '▸'} ${this.accentText(commit.hash)} ${this.escapeTags(commit.subject)}`,
         style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
       });
       if (rightMarker) {
@@ -126,7 +126,7 @@ module.exports = {
   historyRightMarker(remoteBranches, isLatestCommit) {
     const parts = [];
     const branchName = this.latestBranchMarker(isLatestCommit);
-    if (branchName) parts.push(`{blue-fg}${this.escapeTags(branchName)}{/blue-fg}`);
+    if (branchName) parts.push(this.accentText(branchName));
     const remoteMarker = this.remoteBranchMarker(remoteBranches);
     if (remoteMarker) parts.push(`{red-fg}${this.escapeTags(remoteMarker)}{/red-fg}`);
     return parts.join(' ');

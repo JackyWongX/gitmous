@@ -46,7 +46,9 @@ module.exports = {
   },
 
   textWidth(value) {
-    const text = String(value || '').replace(/\{\/?[^}]+}/g, '');
+    const text = String(value || '')
+      .replace(/\x1b\[[0-9;]*m/g, '')
+      .replace(/\{\/?[^}]+}/g, '');
     let width = 0;
     for (const char of text) {
       const code = char.codePointAt(0);
@@ -86,16 +88,44 @@ module.exports = {
     return `#${values.map(item => item.toString(16).padStart(2, '0')).join('')}`;
   },
 
-  setElementAccent(element) {
-    if (!element || !element.style) return;
-    if (element.__themeButton) {
-      element.style.fg = this.COLORS.accent;
-      if (element.style.hover) element.style.hover.fg = this.COLORS.accent;
-      if (element.style.focus) element.style.focus.fg = this.COLORS.accent;
+  persistUserSettings() {
+    if (typeof this.saveSettings !== 'function') return;
+    try {
+      this.saveSettings({
+        language: this.language,
+        themeColor: this.COLORS.accent
+      });
+    } catch (error) {
+      this.toast(this.t('settingsSaveFailed', { message: error.message }), this.COLORS.red);
     }
-    if (element.style.border && element.__themeAccentBorder) element.style.border.fg = this.COLORS.accent;
+  },
+
+  setElementAccent(element) {
+    if (!element) return;
+    if (element.style) {
+      if (element.__themeButton) {
+        element.style.fg = this.COLORS.accent;
+        if (element.style.hover) element.style.hover.fg = this.COLORS.accent;
+        if (element.style.focus) element.style.focus.fg = this.COLORS.accent;
+      }
+      if (element.style.border && element.__themeAccentBorder) element.style.border.fg = this.COLORS.accent;
+    }
     if (element.scrollbar && element.scrollbar.style) element.scrollbar.style.bg = this.COLORS.accent;
     if (element.children) element.children.forEach(child => this.setElementAccent(child));
+  },
+
+  themeRgb() {
+    const color = this.normalizeColorValue(this.COLORS.accent) || '#58b6e8';
+    return [
+      parseInt(color.slice(1, 3), 16),
+      parseInt(color.slice(3, 5), 16),
+      parseInt(color.slice(5, 7), 16)
+    ];
+  },
+
+  accentText(value) {
+    const [red, green, blue] = this.themeRgb();
+    return `\x1b[38;2;${red};${green};${blue}m${this.escapeTags(value)}\x1b[39m`;
   },
 
   applyThemeColor() {
@@ -112,6 +142,7 @@ module.exports = {
       return;
     }
     this.COLORS.accent = color;
+    this.persistUserSettings();
     this.applyThemeColor();
     this.toast(this.t('themeColorChanged', { color }), this.COLORS.accent);
   },
@@ -174,6 +205,7 @@ module.exports = {
     if (!['en', 'zh'].includes(language) || this.language === language) return;
     this.closeDropdownMenu();
     this.language = language;
+    this.persistUserSettings();
     this.applyLanguage();
   },
 
@@ -677,7 +709,7 @@ module.exports = {
           right: 1,
           height: 1,
           tags: true,
-          content: `{cyan-fg}${this.escapeTags(entry.label)}{/cyan-fg}`,
+          content: this.accentText(entry.label),
           style: { fg: this.COLORS.accent, bg: this.COLORS.panel, bold: true }
         });
         return;
@@ -820,7 +852,7 @@ module.exports = {
   colorizeDiffLine(line, forcedKind = null) {
     const kind = forcedKind || this.diffLineKind(line);
     const safe = this.escapeTags(line);
-    if (kind === 'hunk') return `{cyan-fg}${safe}{/cyan-fg}`;
+    if (kind === 'hunk') return this.accentText(line);
     if (kind === 'file') return `{bold}${safe}{/bold}`;
     if (kind === 'add') return `{green-fg}${safe}{/green-fg}`;
     if (kind === 'delete') return `{red-fg}${safe}{/red-fg}`;

@@ -8,6 +8,7 @@ const { COLORS } = require('./theme');
 const { createState } = require('./state');
 const { createLayout } = require('./ui/layout');
 const { createTranslator } = require('./i18n');
+const { loadSettings, saveSettings } = require('./settings');
 
 class GitUiApp {
   constructor() {
@@ -18,10 +19,14 @@ class GitUiApp {
     this.spawn = spawn;
     this.fs = fs;
     this.path = path;
-    this.COLORS = COLORS;
-    this.language = 'en';
+    this.saveSettings = saveSettings;
+    const loadedSettings = loadSettings();
+    this.settingsPath = loadedSettings.file;
+    this.COLORS = { ...COLORS, accent: loadedSettings.settings.themeColor };
+    this.language = loadedSettings.settings.language;
     this.t = createTranslator(() => this.language);
     this.state = createState();
+    this.state.language = this.language;
     this.reportingUnhandledError = false;
     this.activeDropdownMenu = null;
     this.activeDropdownOutsideHandler = null;

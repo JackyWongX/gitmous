@@ -26,7 +26,7 @@ module.exports = {
         height: 1,
         shrink: false,
         tags: true,
-        content: `{cyan-fg}↓{/cyan-fg} ${this.t('cloneFromRemote')}`,
+        content: `${this.accentText('↓')} ${this.t('cloneFromRemote')}`,
         style: { fg: this.COLORS.accent, bg: this.COLORS.panel, hover: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt } }
       });
       cloneButton.on('press', () => this.cloneRemoteRepository());

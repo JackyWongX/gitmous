@@ -258,7 +258,7 @@ module.exports = {
 
   actionMenu(anchor) {
     this.showMenu(this.t('gitActions'), [
-      { label: `{cyan-fg}${this.t('networkCategory')}{/cyan-fg}`, action: menuAnchor => this.networkMenu(menuAnchor) },
+      { label: this.accentText(this.t('networkCategory')), action: menuAnchor => this.networkMenu(menuAnchor) },
       { label: `{green-fg}${this.t('branchCategory')}{/green-fg}`, action: menuAnchor => this.branchMenu(menuAnchor) },
       { label: `{yellow-fg}${this.t('stashCategory')}{/yellow-fg}`, action: menuAnchor => this.stashMenu(menuAnchor) },
       { label: `{purple-fg}${this.t('tagCategory')}{/purple-fg}`, action: menuAnchor => this.tagMenu(menuAnchor) },
