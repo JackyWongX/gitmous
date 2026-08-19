@@ -15,16 +15,25 @@ module.exports = {
     if (!this.state.repo) return { mode: 'none', label: '提交' };
     if (!this.state.upstream) return { mode: 'publish', label: '发布分支' };
     if (this.state.behind > 0) return { mode: 'pull', label: '↓ 拉取' };
-    return { mode: 'push', label: '↑ 推送' };
+    if (this.state.ahead > 0) return { mode: 'push', label: '↑ 推送' };
+    return { mode: 'commit', label: '提交' };
   },
 
   updateCommitButton() {
     const action = this.commitActionState();
-    const maxButtonWidth = Math.max(6, Math.min(30, Math.floor((this.screen.width || 80) * 0.28)));
-    const width = Math.min(maxButtonWidth, Math.max(6, this.textWidth(action.label) + 2));
+    const panelWidth = Math.max(24, Math.floor((this.screen.width || 80) * 0.42) - 2);
+    const inputLeft = 2;
+    const buttonRight = 1;
+    const gap = 1;
+    const minInputWidth = 14;
+    const desiredButtonWidth = Math.max(6, this.textWidth(action.label) + 2);
+    const maxButtonWidth = Math.max(4, panelWidth - inputLeft - buttonRight - gap - minInputWidth);
+    const width = Math.min(desiredButtonWidth, maxButtonWidth);
+    this.commitButton.right = buttonRight;
     this.commitButton.width = width;
     this.commitButton.setContent(action.label);
-    this.commitInput.right = width + 2;
+    this.commitInput.left = inputLeft;
+    this.commitInput.right = buttonRight + width + gap;
   },
 
   syncCommitInputScroll() {

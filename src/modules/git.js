@@ -76,10 +76,11 @@ module.exports = {
 
   async refreshRepo() {
     if (!this.state.repo) return;
-    const [statusRaw, branch, remote, history] = await Promise.all([
+    const [statusRaw, branch, remote, remoteRefsRaw, history] = await Promise.all([
       this.git(['status', '--porcelain=v1', '-z']),
       this.git(['branch', '--show-current']),
       this.git(['remote']).catch(() => ''),
+      this.git(['for-each-ref', '--format=%(objectname)%09%(refname:short)', 'refs/remotes']).catch(() => ''),
       this.git(['log', '-n', '180', '--date=short', '--pretty=format:%H%x09%h%x09%ad%x09%an%x09%s']).catch(() => '')
     ]);
     this.state.status = this.parseStatus(statusRaw);
@@ -94,6 +95,14 @@ module.exports = {
       this.state.ahead = Number(counts[0]) || 0;
       this.state.behind = Number(counts[1]) || 0;
     }
+    this.state.remoteRefs = new Map();
+    remoteRefsRaw.split(/\r?\n/).filter(Boolean).forEach(line => {
+      const [hash, name] = line.split('\t');
+      if (!hash || !name || name.endsWith('/HEAD')) return;
+      const names = this.state.remoteRefs.get(hash) || [];
+      names.push(name);
+      this.state.remoteRefs.set(hash, names);
+    });
     this.state.history = history ? history.split(/\r?\n/).filter(Boolean).map(line => {
       const [fullHash, hash, date, author, ...subjectParts] = line.split('\t');
       return { fullHash, hash, date, author, subject: subjectParts.join('\t') };

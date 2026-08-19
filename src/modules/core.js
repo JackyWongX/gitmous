@@ -43,7 +43,23 @@ module.exports = {
   },
 
   textWidth(value) {
-    return String(value || '').replace(/\{\/?[^}]+}/g, '').length;
+    const text = String(value || '').replace(/\{\/?[^}]+}/g, '');
+    let width = 0;
+    for (const char of text) {
+      const code = char.codePointAt(0);
+      if (
+        (code >= 0x1100 && code <= 0x115f) ||
+        (code >= 0x2e80 && code <= 0xa4cf) ||
+        (code >= 0xac00 && code <= 0xd7a3) ||
+        (code >= 0xf900 && code <= 0xfaff) ||
+        (code >= 0xfe10 && code <= 0xfe19) ||
+        (code >= 0xfe30 && code <= 0xfe6f) ||
+        (code >= 0xff00 && code <= 0xff60) ||
+        (code >= 0xffe0 && code <= 0xffe6)
+      ) width += 2;
+      else width += 1;
+    }
+    return width;
   },
 
   toast(message, color = this.COLORS.accent) {

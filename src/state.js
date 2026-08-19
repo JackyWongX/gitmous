@@ -14,6 +14,7 @@ function createState() {
     behind: 0,
     status: { staged: [], unstaged: [], untracked: [] },
     history: [],
+    remoteRefs: new Map(),
     expandedHistory: new Set(),
     historyFiles: new Map(),
     selected: null,

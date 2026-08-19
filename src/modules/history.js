@@ -6,17 +6,33 @@ module.exports = {
     let row = 0;
     this.state.history.forEach(commit => {
       const expanded = this.state.expandedHistory.has(commit.hash);
+      const remoteBranches = this.state.remoteRefs.get(commit.fullHash) || [];
+      const hasRemoteMarker = remoteBranches.length > 0;
+      const markerWidth = hasRemoteMarker ? 3 : 0;
       const commitButton = this.blessed.box({
         parent: this.historyContent,
         top: row,
         left: 0,
-        right: 0,
+        right: markerWidth ? markerWidth + 1 : 0,
         height: 1,
         tags: true,
         mouse: true,
         content: `${expanded ? '▾' : '▸'} {cyan-fg}${this.escapeTags(commit.hash)}{/cyan-fg} ${this.escapeTags(commit.subject)}`,
         style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
       });
+      if (hasRemoteMarker) {
+        this.blessed.box({
+          parent: this.historyContent,
+          top: row,
+          right: 0,
+          width: markerWidth,
+          height: 1,
+          tags: true,
+          align: 'center',
+          content: '☁',
+          style: { fg: this.COLORS.red, bg: this.COLORS.panel, bold: true }
+        });
+      }
       commitButton.on('click', data => {
         if (data && data.button === 'right') {
           this.commitContextMenu(commit, this.mouseAnchor(data) || commitButton);

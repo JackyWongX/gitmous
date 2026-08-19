@@ -124,7 +124,11 @@ module.exports = {
   },
 
   async discard(file, untracked) {
-    this.confirm('丢弃文件', `确定要丢弃 ${file} 的全部本地修改吗？`, () => this.perform(`丢弃 ${file}`, () => untracked ? this.git(['clean', '-f', '--', file]) : this.git(['restore', '--source=HEAD', '--staged', '--worktree', '--', file])));
+    this.confirm(
+      '确认撤销文件更改',
+      `这是危险操作，会丢弃该文件的本地修改，操作后无法从 GitUI 恢复。\n\n文件：${file}\n\n确定继续吗？`,
+      () => this.perform(`丢弃 ${file}`, () => untracked ? this.git(['clean', '-f', '--', file]) : this.git(['restore', '--source=HEAD', '--worktree', '--', file]))
+    );
   },
 
   async showFileDiff(item, staged) {
@@ -137,8 +141,9 @@ module.exports = {
   },
 
   discardAllChanges() {
-    this.confirm('丢弃全部更改', '这会还原已跟踪文件并永久删除未跟踪文件，确定继续吗？', () => this.perform('丢弃全部更改', async () => {
-      await this.git(['restore', '--source=HEAD', '--staged', '--worktree', '.']);
+    const count = this.state.status.unstaged.length + this.state.status.untracked.length;
+    this.confirm('确认撤销多个文件更改', `这是危险操作，会丢弃“更改”区域中的 ${count} 个文件修改。\n\n已跟踪文件会还原到 HEAD，未跟踪文件会被永久删除，操作后无法从 GitUI 恢复。\n\n确定继续吗？`, () => this.perform('丢弃全部更改', async () => {
+      await this.git(['restore', '--source=HEAD', '--worktree', '.']);
       await this.git(['clean', '-fd']);
     }));
   },

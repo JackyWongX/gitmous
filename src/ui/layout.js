@@ -54,7 +54,7 @@ function createLayout(app) {
   app.commitHeader = app.button({ parent: app.workPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 提交' });
   app.commitMoreButton = app.button({ parent: app.workPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
   app.commitInput = blessed.textarea({ parent: app.workPanel, top: 2, left: 2, right: 8, height: 3, mouse: true, inputOnFocus: true, keys: false, tags: false, border: 'line', style: { fg: COLORS.text, bg: '#121925', border: { fg: COLORS.border }, focus: { border: { fg: COLORS.accent } } } });
-  app.commitButton = app.button({ parent: app.workPanel, top: 2, right: 1, width: 6, height: 3, align: 'center', valign: 'middle', content: '提交' });
+  app.commitButton = app.button({ parent: app.workPanel, top: 2, right: 1, width: 6, height: 3, shrink: false, align: 'center', valign: 'middle', content: '提交' });
 
   app.changeHeader = app.button({ parent: app.changePanel, top: 1, left: 1, right: 6, height: 1, tags: true, content: '▾ 更改' });
   app.changeMoreButton = app.button({ parent: app.changePanel, top: 1, right: 1, width: 4, height: 1, content: '...' });
