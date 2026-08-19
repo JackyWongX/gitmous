@@ -1,7 +1,7 @@
 'use strict';
 
 const blessed = require('blessed');
-const { execFile } = require('child_process');
+const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -321,14 +321,14 @@ async function refreshRepo() {
     git(['status', '--porcelain=v1', '-z']),
     git(['branch', '--show-current']),
     git(['remote']).catch(() => ''),
-    git(['log', '-n', '180', '--date=short', '--pretty=format:%h%x09%ad%x09%an%x09%s']).catch(() => '')
+    git(['log', '-n', '180', '--date=short', '--pretty=format:%H%x09%h%x09%ad%x09%an%x09%s']).catch(() => '')
   ]);
   state.status = parseStatus(statusRaw);
   state.branch = branch.trim() || '(分离 HEAD)';
   state.remote = remote.split(/\r?\n/)[0] || '无远程仓库';
   state.history = history ? history.split(/\r?\n/).filter(Boolean).map(line => {
-    const [hash, date, author, subject] = line.split('\t');
-    return { hash, date, author, subject };
+    const [fullHash, hash, date, author, ...subjectParts] = line.split('\t');
+    return { fullHash, hash, date, author, subject: subjectParts.join('\t') };
   }) : [];
   renderAll();
 }
@@ -495,6 +495,26 @@ function textWidth(value) {
   return String(value || '').replace(/\{\/?[^}]+}/g, '').length;
 }
 
+function writeClipboard(text) {
+  return new Promise((resolve, reject) => {
+    const value = String(text || '');
+    const pwsh = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
+    const command = process.platform === 'win32' && fs.existsSync(pwsh) ? pwsh : (process.platform === 'win32' ? 'powershell.exe' : 'pbcopy');
+    const args = process.platform === 'win32'
+      ? ['-NoLogo', '-NoProfile', '-Command', '[Console]::InputEncoding=[Text.UTF8Encoding]::new($false); Set-Clipboard -Value ([Console]::In.ReadToEnd())']
+      : [];
+    const child = spawn(command, args, { windowsHide: true, stdio: ['pipe', 'ignore', 'pipe'] });
+    let stderr = '';
+    child.stderr.on('data', chunk => { stderr += chunk.toString('utf8'); });
+    child.on('error', reject);
+    child.on('close', code => {
+      if (code === 0) resolve();
+      else reject(new Error((stderr || `剪贴板命令退出码 ${code}`).trim()));
+    });
+    child.stdin.end(value, 'utf8');
+  });
+}
+
 function anchorPosition(anchor, width, height) {
   const fallback = { top: 2, left: Math.max(1, screen.width - width - 2) };
   if (!anchor || !anchor.parent) return fallback;
@@ -506,6 +526,14 @@ function anchorPosition(anchor, width, height) {
   const above = pos.yi - height;
   const top = below + height < screen.height ? below : Math.max(1, above);
   return { top, left };
+}
+
+function mouseAnchor(data) {
+  if (!data || data.x == null || data.y == null) return null;
+  return {
+    parent: screen,
+    lpos: { xi: data.x, xl: data.x + 1, yi: data.y, yl: data.y + 1 }
+  };
 }
 
 function pointInside(element, data) {
@@ -638,19 +666,24 @@ function renderHistory() {
   let row = 0;
   state.history.forEach(commit => {
     const expanded = state.expandedHistory.has(commit.hash);
-    const commitButton = button({
+    const commitButton = blessed.box({
       parent: historyContent,
       top: row,
       left: 0,
       right: 0,
       height: 1,
-      shrink: false,
       tags: true,
-      padding: { left: 0, right: 0 },
+      mouse: true,
       content: `${expanded ? '▾' : '▸'} {cyan-fg}${escapeTags(commit.hash)}{/cyan-fg} ${escapeTags(commit.subject)}`,
       style: { fg: COLORS.text, bg: COLORS.panel, hover: { fg: COLORS.text, bg: COLORS.panelAlt } }
     });
-    commitButton.on('press', () => toggleCommitFiles(commit));
+    commitButton.on('click', data => {
+      if (data && data.button === 'right') {
+        commitContextMenu(commit, mouseAnchor(data) || commitButton);
+        return;
+      }
+      toggleCommitFiles(commit);
+    });
     row += 1;
     if (!expanded) return;
 
@@ -856,6 +889,50 @@ async function showCommitFileDiff(commit, fileItem) {
   detailPanel.setContent(formatDiff(diff || '没有可显示的文本差异。'));
   detailPanel.setScroll(0);
   screen.render();
+}
+
+async function resolveCommitHash(commit) {
+  if (commit.fullHash && commit.fullHash.length >= 40) return commit.fullHash;
+  return (await git(['rev-parse', commit.hash])).trim();
+}
+
+function commitContextMenu(commit, anchor) {
+  const shortHash = commit.hash || (commit.fullHash || '').slice(0, 8);
+  showMenu(`提交 ${shortHash}`, [
+    {
+      label: '创建分支',
+      action: () => textDialog('从提交创建分支', '输入新分支名', async name => {
+        const fullHash = await resolveCommitHash(commit);
+        await perform(`创建分支 ${name}`, () => git(['branch', name, fullHash]));
+      })
+    },
+    {
+      label: '{red-fg}还原到当前{/red-fg}',
+      action: async () => {
+        const fullHash = await resolveCommitHash(commit);
+        confirm(
+          '还原到当前提交',
+          `这会执行 git reset --hard ${fullHash}\n\n当前分支会回退到该提交；该提交之后的提交会从当前分支历史中移除，已跟踪文件的未提交修改也会丢失。\n\n确定继续吗？`,
+          () => perform('还原到当前提交', () => git(['reset', '--hard', fullHash]))
+        );
+      }
+    },
+    {
+      label: '复制hash',
+      action: () => perform('复制hash', async () => {
+        const fullHash = await resolveCommitHash(commit);
+        await writeClipboard(fullHash);
+      }, false)
+    },
+    {
+      label: '复制提交内容',
+      action: () => perform('复制提交内容', async () => {
+        const fullHash = await resolveCommitHash(commit);
+        const content = await git(['show', '--stat', '--patch', '--decorate=full', '--find-renames', fullHash]);
+        await writeClipboard(content);
+      }, false)
+    }
+  ], anchor);
 }
 
 function networkMenu(anchor) {
