@@ -48,6 +48,9 @@ const state = {
   }
 };
 
+let activeDropdownMenu = null;
+let activeDropdownOutsideHandler = null;
+
 function box(options) {
   return blessed.box({
     tags: true,
@@ -97,10 +100,11 @@ const footer = blessed.box({ left: 0, bottom: 0, width: '100%', height: 2, tags:
 screen.append(detailPanel);
 screen.append(leftPanel);
 
-const repoHeader = button({ parent: repoPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 存储库' });
-const repoMoreButton = button({ parent: repoPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
-const repoList = blessed.list({ parent: repoPanel, top: 2, left: 1, right: 1, bottom: 3, mouse: true, tags: true, keys: false, vi: false, style: { selected: { bg: COLORS.accent, fg: '#06131b' }, item: { fg: COLORS.text } }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
-const addRepoButton = button({ parent: repoPanel, bottom: 1, left: 2, width: 12, content: '+ 添加仓库' });
+const iconStyle = { fg: 'brightwhite', bg: COLORS.panel, bold: true };
+const repoHeader = button({ parent: repoPanel, top: 1, left: 1, right: 5, height: 1, tags: true, content: '▾ 存储库' });
+const repoAddButton = button({ parent: repoPanel, top: 1, right: 1, width: 3, height: 1, content: '+', style: iconStyle });
+const repoArea = blessed.box({ parent: repoPanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+const repoContent = blessed.box({ parent: repoArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
 const commitHeader = button({ parent: workPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 提交' });
 const commitMoreButton = button({ parent: workPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
@@ -108,7 +112,6 @@ const commitInput = blessed.textarea({ parent: workPanel, top: 2, left: 2, right
 const commitButton = button({ parent: workPanel, top: 2, right: 1, width: 6, height: 3, align: 'center', valign: 'middle', content: '提交' });
 
 const changeHeader = button({ parent: changePanel, top: 1, left: 1, right: 6, height: 1, tags: true, content: '▾ 更改' });
-const iconStyle = { fg: 'brightwhite', bg: COLORS.panel, bold: true };
 const fileRowHoverBg = COLORS.panelAlt;
 const changeMoreButton = button({ parent: changePanel, top: 1, right: 1, width: 4, height: 1, content: '...' });
 const changeArea = blessed.box({ parent: changePanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
@@ -143,7 +146,8 @@ function syncCommitInputScroll() {
 
 function reflowLeftPanel() {
   const rows = Math.max(22, screen.height || 24);
-  const repoHeight = state.collapsed.repositories ? 3 : Math.min(8, Math.max(7, Math.floor(rows * 0.2)));
+  const repoRows = Math.min(6, Math.max(1, state.roots.length));
+  const repoHeight = state.collapsed.repositories ? 3 : repoRows + 3;
   const inputHeight = commitInputRows();
   const commitHeight = state.collapsed.commit ? 3 : inputHeight + 3;
   const historyHeight = state.collapsed.history ? 3 : Math.max(6, Math.floor(rows * 0.34));
@@ -168,8 +172,8 @@ function reflowLeftPanel() {
   commitHeader.setContent(sectionCaption(state.collapsed.commit, '提交'));
   changeHeader.setContent(sectionCaption(state.collapsed.changes, '更改'));
   historyHeader.setContent(sectionCaption(state.collapsed.history, '图表'));
-  setVisible(repoList, !state.collapsed.repositories);
-  setVisible(addRepoButton, !state.collapsed.repositories);
+  setVisible(repoAddButton, !state.collapsed.repositories);
+  setVisible(repoArea, !state.collapsed.repositories);
   setVisible(commitInput, !state.collapsed.commit);
   setVisible(commitButton, !state.collapsed.commit);
   setVisible(changeArea, !state.collapsed.changes);
@@ -211,13 +215,33 @@ function git(args, options = {}) {
 
 function toast(message, color = COLORS.accent) {
   const notice = blessed.message({ parent: screen, top: 'center', left: 'center', width: '55%', height: 'shrink', border: 'line', tags: true, style: { fg: COLORS.text, bg: '#172133', border: { fg: color } } });
-  notice.display(` {bold}${escapeTags(message)}{/bold} `, 2, () => notice.destroy());
+  notice.display(` {bold}${escapeTags(message)}{/bold} `, 2, () => destroyElement(notice));
 }
 
 function setBusy(value, label = '') {
   state.busy = value;
   footer.setContent(value ? ` {yellow-fg}正在执行：${escapeTags(label)}{/yellow-fg}` : ' 鼠标点击所有操作 · 提交消息可直接键盘输入 · 破坏性操作会要求确认');
   screen.render();
+}
+
+let reportingUnhandledError = false;
+
+function reportUnhandledError(error) {
+  if (reportingUnhandledError) return;
+  reportingUnhandledError = true;
+  try {
+    const message = error && error.message ? error.message : String(error);
+    state.busy = false;
+    footer.setContent(` {red-fg}操作异常：${escapeTags(message)}{/red-fg}`);
+    detailPanel.setLabel(' 程序异常 ');
+    detailPanel.setContent(escapeTags(error && error.stack ? error.stack : message));
+    screen.render();
+  } catch (renderError) {
+    try { screen.destroy(); } catch (_) {}
+    console.error(renderError && renderError.stack ? renderError.stack : renderError);
+  } finally {
+    reportingUnhandledError = false;
+  }
 }
 
 async function perform(label, operation, refresh = true, options = {}) {
@@ -301,12 +325,54 @@ async function refreshRepo() {
 }
 
 function renderRepositories() {
-  repoList.setItems(state.roots.map(root => {
-    const active = root === state.repo ? '{green-fg}●{/green-fg} ' : '○ ';
-    const branch = root === state.repo ? ` {cyan-fg}${escapeTags(state.branch)}{/cyan-fg}` : '';
-    return `${active}${escapeTags(path.basename(root))}${branch}`;
-  }));
-  if (state.repo) repoList.select(Math.max(0, state.roots.indexOf(state.repo)));
+  clearChildren(repoContent);
+  state.roots.forEach((root, index) => {
+    const active = root === state.repo;
+    const rowStyle = { fg: COLORS.text, bg: COLORS.panel, hover: { fg: COLORS.text, bg: COLORS.panelAlt } };
+    const branch = active ? ` ${escapeTags(state.branch)}` : '';
+    const indicator = active ? '{green-fg}●{/green-fg}' : ' ';
+    const rowButton = button({
+      parent: repoContent,
+      top: index,
+      left: 0,
+      right: active ? 12 : 0,
+      height: 1,
+      shrink: false,
+      padding: { left: 0, right: 0 },
+      tags: true,
+      content: `${indicator} ${escapeTags(path.basename(root))}${branch}`,
+      style: rowStyle
+    });
+    rowButton.on('press', () => {
+      if (root !== state.repo) selectRepo(root);
+    });
+    if (active) {
+      const branchButton = button({
+        parent: repoContent,
+        top: index,
+        right: 5,
+        width: 6,
+        height: 1,
+        shrink: false,
+        content: '分支',
+        style: rowStyle
+      });
+      const moreButton = button({
+        parent: repoContent,
+        top: index,
+        right: 0,
+        width: 4,
+        height: 1,
+        shrink: false,
+        content: '...',
+        style: rowStyle
+      });
+      branchButton.on('press', () => branchSwitchMenu(branchButton));
+      moreButton.on('press', () => repositoryMenu(moreButton));
+    }
+  });
+  repoContent.height = Math.max(1, state.roots.length);
+  resetScrollable(repoArea);
 }
 
 function statusMarker(code) {
@@ -330,19 +396,88 @@ function unregisterTree(element) {
   [...element.children].forEach(unregisterTree);
 }
 
+function clearScreenMouseRefs(element) {
+  if (!element || !element.screen) return;
+  const contains = (root, target) => root === target || root.children.some(child => contains(child, target));
+  if (element.screen.hover && contains(element, element.screen.hover)) element.screen.hover = null;
+  if (element.screen.mouseDown && contains(element, element.screen.mouseDown)) element.screen.mouseDown = null;
+}
+
 function resetScrollable(element) {
   element.childBase = 0;
   element.childOffset = 0;
   if (element.lpos) delete element.lpos._scrollBottom;
 }
 
+function disposeTree(element) {
+  if (!element) return;
+  [...element.children].forEach(disposeTree);
+  unregisterTree(element);
+  element.removeAllListeners();
+  element.children.length = 0;
+  if (element.parent) element.parent.remove(element);
+  element.parent = null;
+  element.detached = true;
+  element.destroyed = true;
+}
+
+function destroyElement(element) {
+  if (!element || element.destroyed) return;
+  clearScreenMouseRefs(element);
+  disposeTree(element);
+}
+
+function closeDropdownMenu() {
+  if (activeDropdownOutsideHandler) {
+    screen.removeListener('mouse', activeDropdownOutsideHandler);
+    activeDropdownOutsideHandler = null;
+  }
+  if (activeDropdownMenu) {
+    const menu = activeDropdownMenu;
+    activeDropdownMenu = null;
+    destroyElement(menu);
+  }
+}
+
 function clearChildren(element) {
-  [...element.children].forEach(child => {
-    unregisterTree(child);
-    child.destroy();
-  });
+  clearScreenMouseRefs(element);
+  [...element.children].forEach(disposeTree);
   element.children.length = 0;
   resetScrollable(element);
+}
+
+function runUiAction(action, label = '操作') {
+  try {
+    const result = action();
+    if (result && typeof result.then === 'function') {
+      result.catch(error => toast(`${label}失败：${error.message}`, COLORS.red));
+    }
+  } catch (error) {
+    toast(`${label}失败：${error.message}`, COLORS.red);
+  }
+}
+
+function textWidth(value) {
+  return String(value || '').replace(/\{\/?[^}]+}/g, '').length;
+}
+
+function anchorPosition(anchor, width, height) {
+  const fallback = { top: 2, left: Math.max(1, screen.width - width - 2) };
+  if (!anchor || !anchor.parent) return fallback;
+  const pos = anchor.lpos || anchor._getCoords();
+  if (!pos) return fallback;
+  const maxLeft = Math.max(1, screen.width - width - 1);
+  const left = Math.min(maxLeft, Math.max(1, pos.xi));
+  const below = pos.yl;
+  const above = pos.yi - height;
+  const top = below + height < screen.height ? below : Math.max(1, above);
+  return { top, left };
+}
+
+function pointInside(element, data) {
+  const pos = element && (element.lpos || element._getCoords());
+  if (!pos || data.x == null || data.y == null) return false;
+  return data.x >= pos.xi && data.x < pos.xl && data.y >= pos.yi && data.y < pos.yl;
 }
 
 function isLiveRowState(rowState) {
@@ -492,8 +627,8 @@ function confirm(title, text, onConfirm) {
   blessed.box({ parent: modal, top: 1, left: 2, right: 2, height: 3, tags: true, content: escapeTags(text), style: { fg: COLORS.text, bg: '#182235' } });
   const yes = button({ parent: modal, bottom: 1, left: 12, width: 12, content: '确认', align: 'center' });
   const no = button({ parent: modal, bottom: 1, right: 12, width: 12, content: '取消', align: 'center' });
-  yes.on('press', () => { modal.destroy(); onConfirm(); screen.render(); });
-  no.on('press', () => { modal.destroy(); screen.render(); });
+  yes.on('press', () => { destroyElement(modal); runUiAction(onConfirm, title); screen.render(); });
+  no.on('press', () => { destroyElement(modal); screen.render(); });
   screen.render();
 }
 
@@ -514,20 +649,58 @@ function textDialog(title, placeholder, submit) {
   const cancel = button({ parent: modal, bottom: 1, left: 16, width: 11, content: '取消' });
   const ok = button({ parent: modal, bottom: 1, right: 2, width: 14, content: '确认' });
   back.on('press', () => { input.setValue(input.getValue().slice(0, -1)); screen.render(); });
-  cancel.on('press', () => { modal.destroy(); screen.render(); });
-  ok.on('press', () => { const value = input.getValue().trim(); if (!value) { toast('请输入内容', COLORS.yellow); return; } modal.destroy(); submit(value); screen.render(); });
+  cancel.on('press', () => { destroyElement(modal); screen.render(); });
+  ok.on('press', () => { const value = input.getValue().trim(); if (!value) { toast('请输入内容', COLORS.yellow); return; } destroyElement(modal); runUiAction(() => submit(value), title); screen.render(); });
   screen.render();
 }
 
-function showMenu(title, entries) {
-  const height = Math.min(entries.length + 4, 22);
-  const modal = box({ parent: screen, top: 'center', left: 'center', width: 56, height, label: ` ${title} `, style: { fg: COLORS.text, bg: '#182235', border: { fg: COLORS.accent } } });
-  entries.slice(0, height - 3).forEach((entry, index) => {
-    const item = button({ parent: modal, top: index + 1, left: 2, right: 2, height: 1, tags: true, content: entry.label });
-    item.on('press', () => { modal.destroy(); entry.action(); screen.render(); });
+function showMenu(title, entries, anchor) {
+  closeDropdownMenu();
+  const visibleEntries = entries.slice(0, 18);
+  const width = Math.min(64, Math.max(18, textWidth(title) + 6, ...visibleEntries.map(entry => textWidth(entry.label) + 4)));
+  const height = Math.max(3, visibleEntries.length + 2);
+  const position = anchorPosition(anchor, width, height);
+  const modal = box({
+    parent: screen,
+    top: position.top,
+    left: position.left,
+    width,
+    height,
+    label: ` ${title} `,
+    style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.accent } }
   });
-  const cancel = button({ parent: modal, bottom: 1, left: 2, width: 10, content: '关闭' });
-  cancel.on('press', () => { modal.destroy(); screen.render(); });
+  activeDropdownMenu = modal;
+  visibleEntries.forEach((entry, index) => {
+    const item = button({
+      parent: modal,
+      top: index + 1,
+      left: 1,
+      right: 1,
+      height: 1,
+      shrink: false,
+      tags: true,
+      padding: { left: 1, right: 1 },
+      content: entry.label,
+      style: {
+        fg: COLORS.text,
+        bg: COLORS.panel,
+        hover: { fg: COLORS.text, bg: COLORS.panelAlt },
+        focus: { fg: COLORS.text, bg: COLORS.panelAlt }
+      }
+    });
+    item.on('press', () => {
+      const itemAnchor = { lpos: item.lpos, parent: screen };
+      closeDropdownMenu();
+      runUiAction(() => entry.action(itemAnchor), title);
+      screen.render();
+    });
+  });
+  activeDropdownOutsideHandler = data => {
+    if (!data || data.action === 'mousemove' || pointInside(modal, data)) return;
+    closeDropdownMenu();
+    screen.render();
+  };
+  setImmediate(() => screen.on('mouse', activeDropdownOutsideHandler));
   screen.render();
 }
 
@@ -552,103 +725,117 @@ async function showCommit(commit) {
   screen.render();
 }
 
-function networkMenu() {
+function networkMenu(anchor) {
   showMenu('网络操作', [
     { label: '拉取  git pull --no-rebase', action: () => perform('拉取', () => git(['pull', '--no-rebase'])) },
     { label: '推送  git push', action: () => perform('推送', () => git(['push'])) },
     { label: '抓取  git fetch --prune', action: () => perform('抓取', () => git(['fetch', '--prune'])) },
     { label: '发布当前分支到 origin', action: () => perform('发布分支', () => git(['push', '-u', 'origin', state.branch])) }
-  ]);
+  ], anchor);
 }
 
-async function branchMenu() {
-  const branches = (await git(['for-each-ref', '--format=%(refname:short)', 'refs/heads']).catch(() => '')).split(/\r?\n/).filter(Boolean);
+async function localBranches() {
+  return (await git(['for-each-ref', '--format=%(refname:short)', 'refs/heads']).catch(() => '')).split(/\r?\n/).filter(Boolean);
+}
+
+async function branchSwitchMenu(anchor) {
+  const branches = await localBranches();
+  const entries = branches.length
+    ? branches.map(name => ({
+      label: `${name === state.branch ? '{green-fg}●{/green-fg} ' : '○ '}切换到 ${escapeTags(name)}`,
+      action: () => name === state.branch ? toast('已在当前分支') : perform(`切换到 ${name}`, () => git(['switch', name]))
+    }))
+    : [{ label: '没有本地分支', action: () => {} }];
+  showMenu('切换分支', entries, anchor);
+}
+
+async function branchMenu(anchor) {
+  const branches = await localBranches();
   showMenu('分支管理', [
     { label: '新建分支', action: () => textDialog('新建分支', '通过屏幕软键盘输入分支名', name => perform('创建分支', () => git(['switch', '-c', name]))) },
-    { label: '合并分支', action: () => mergeMenu(branches) },
-    { label: '删除分支', action: () => deleteBranchMenu(branches) },
+    { label: '合并分支', action: menuAnchor => mergeMenu(branches, menuAnchor) },
+    { label: '删除分支', action: menuAnchor => deleteBranchMenu(branches, menuAnchor) },
     ...branches.map(name => ({ label: `${name === state.branch ? '{green-fg}●{/green-fg} ' : '○ '}切换到 ${escapeTags(name)}`, action: () => name === state.branch ? toast('已在当前分支') : perform(`切换到 ${name}`, () => git(['switch', name])) }))
-  ]);
+  ], anchor);
 }
 
-function mergeMenu(branches) {
+function mergeMenu(branches, anchor) {
   const options = branches.filter(name => name !== state.branch).map(name => ({ label: `合并 ${escapeTags(name)} 到 ${escapeTags(state.branch)}`, action: () => confirm('合并分支', `将 ${name} 合并到 ${state.branch}，确定继续吗？`, () => perform('合并分支', () => git(['merge', '--no-edit', name]))) }));
-  showMenu('选择要合并的分支', options.length ? options : [{ label: '没有可合并的其他本地分支', action: () => {} }]);
+  showMenu('选择要合并的分支', options.length ? options : [{ label: '没有可合并的其他本地分支', action: () => {} }], anchor);
 }
 
-function deleteBranchMenu(branches) {
+function deleteBranchMenu(branches, anchor) {
   const options = branches.filter(name => name !== state.branch).map(name => ({ label: `{red-fg}删除{/red-fg} ${escapeTags(name)}`, action: () => confirm('删除分支', `删除本地分支 ${name} 吗？未合并的提交会阻止删除。`, () => perform('删除分支', () => git(['branch', '-d', name]))) }));
-  showMenu('选择要删除的分支', options.length ? options : [{ label: '当前没有可删除的其他本地分支', action: () => {} }]);
+  showMenu('选择要删除的分支', options.length ? options : [{ label: '当前没有可删除的其他本地分支', action: () => {} }], anchor);
 }
 
-async function stashMenu() {
+async function stashMenu(anchor) {
   const stashes = (await git(['stash', 'list']).catch(() => '')).split(/\r?\n/).filter(Boolean);
   showMenu('储藏', [
     { label: '储藏当前更改', action: () => textDialog('储藏当前更改', '输入储藏说明', message => perform('储藏', () => git(['stash', 'push', '-m', message]))) },
     { label: '应用最新储藏', action: () => perform('应用储藏', () => git(['stash', 'pop'])) },
-    ...stashes.map((stash, index) => ({ label: `{yellow-fg}${escapeTags(stash)}{/yellow-fg}`, action: () => stashDetailMenu(index, stash) }))
-  ]);
+    ...stashes.map((stash, index) => ({ label: `{yellow-fg}${escapeTags(stash)}{/yellow-fg}`, action: menuAnchor => stashDetailMenu(index, stash, menuAnchor) }))
+  ], anchor);
 }
 
-function stashDetailMenu(index, stash) {
+function stashDetailMenu(index, stash, anchor) {
   showMenu(`储藏 ${index}`, [
     { label: '查看差异', action: async () => { const diff = await git(['stash', 'show', '-p', `stash@{${index}}`]); detailPanel.setContent(formatDiff(diff)); detailPanel.setLabel(` 储藏：${index} `); screen.render(); } },
     { label: '应用但保留', action: () => perform('应用储藏', () => git(['stash', 'apply', `stash@{${index}}`])) },
     { label: '弹出并删除', action: () => perform('弹出储藏', () => git(['stash', 'pop', `stash@{${index}}`])) },
     { label: '{red-fg}删除储藏{/red-fg}', action: () => confirm('删除储藏', `删除 ${stash} 吗？`, () => perform('删除储藏', () => git(['stash', 'drop', `stash@{${index}}`]))) }
-  ]);
+  ], anchor);
 }
 
-async function tagMenu() {
+async function tagMenu(anchor) {
   const tags = (await git(['tag', '--list']).catch(() => '')).split(/\r?\n/).filter(Boolean);
   showMenu('标签', [
     { label: '新建轻量标签（当前 HEAD）', action: () => textDialog('新建标签', '输入标签名，例如 v1.0.0', name => perform('创建标签', () => git(['tag', name]))) },
     ...tags.map(name => ({ label: `{red-fg}删除{/red-fg} ${escapeTags(name)}`, action: () => confirm('删除标签', `删除本地标签 ${name} 吗？`, () => perform('删除标签', () => git(['tag', '-d', name]))) }))
-  ]);
+  ], anchor);
 }
 
-async function remoteMenu() {
+async function remoteMenu(anchor) {
   const names = (await git(['remote']).catch(() => '')).split(/\r?\n/).filter(Boolean);
   showMenu('远程仓库', [
     { label: '添加远程仓库', action: () => textDialog('远程名称', '例如 origin', name => textDialog('远程地址', '例如 https://example.com/repo.git', url => perform('添加远程', () => git(['remote', 'add', name, url])))) },
     ...names.map(name => ({ label: `查看 ${escapeTags(name)}`, action: async () => { const url = await git(['remote', 'get-url', name]); detailPanel.setLabel(' 远程仓库 '); detailPanel.setContent(`${name}\n${url}`); screen.render(); } })),
     ...names.map(name => ({ label: `{red-fg}删除远程{/red-fg} ${escapeTags(name)}`, action: () => confirm('删除远程', `删除远程 ${name} 吗？`, () => perform('删除远程', () => git(['remote', 'remove', name]))) }))
-  ]);
+  ], anchor);
 }
 
-function actionMenu() {
+function actionMenu(anchor) {
   showMenu('Git 操作', [
-    { label: '{cyan-fg}网络：拉取、推送、抓取{/cyan-fg}', action: networkMenu },
-    { label: '{green-fg}分支：新建、切换、合并、删除{/green-fg}', action: branchMenu },
-    { label: '{yellow-fg}储藏：保存、应用、删除{/yellow-fg}', action: stashMenu },
-    { label: '{purple-fg}标签：创建、删除{/purple-fg}', action: tagMenu },
-    { label: '远程仓库：添加、查看、删除', action: remoteMenu },
+    { label: '{cyan-fg}网络：拉取、推送、抓取{/cyan-fg}', action: menuAnchor => networkMenu(menuAnchor) },
+    { label: '{green-fg}分支：新建、切换、合并、删除{/green-fg}', action: menuAnchor => branchMenu(menuAnchor) },
+    { label: '{yellow-fg}储藏：保存、应用、删除{/yellow-fg}', action: menuAnchor => stashMenu(menuAnchor) },
+    { label: '{purple-fg}标签：创建、删除{/purple-fg}', action: menuAnchor => tagMenu(menuAnchor) },
+    { label: '远程仓库：添加、查看、删除', action: menuAnchor => remoteMenu(menuAnchor) },
     { label: '{red-fg}撤销最近一次提交（保留暂存区）{/red-fg}', action: () => confirm('撤销提交', '将使用 git reset --soft HEAD~1，提交会被撤销但内容保留在暂存区。', () => perform('撤销提交', () => git(['reset', '--soft', 'HEAD~1']))) }
-  ]);
+  ], anchor);
 }
 
-function repositoryMenu() {
+function repositoryMenu(anchor) {
   showMenu('存储库', [
     { label: '刷新当前存储库', action: () => perform('刷新', refreshRepo, false) },
-    { label: '添加已存在的 Git 存储库', action: () => addRepoButton.emit('press') },
     { label: '查看当前存储库路径', action: () => { detailPanel.setLabel(' 存储库路径 '); detailPanel.setContent(escapeTags(state.repo || '未选择')); screen.render(); } }
-  ]);
+  ], anchor);
 }
 
-function changesMenu() {
+function changesMenu(anchor) {
   showMenu('更改', [
     { label: '暂存所有更改', action: () => perform('暂存所有更改', () => git(['add', '-A'])) },
     { label: '取消所有暂存', action: () => perform('取消所有暂存', () => git(['reset', 'HEAD']).catch(() => git(['rm', '--cached', '-r', '--ignore-unmatch', '--', '.']))) },
     { label: '{red-fg}丢弃全部本地更改{/red-fg}', action: () => discardAllChanges() }
-  ]);
+  ], anchor);
 }
 
-function historyMenu() {
+function historyMenu(anchor) {
   showMenu('图表', [
     { label: '刷新提交历史', action: () => perform('刷新历史', refreshRepo, false) },
     { label: '查看当前分支日志', action: async () => { const log = await git(['log', '--graph', '--decorate', '--oneline', '-n', '180']); detailPanel.setLabel(' 当前分支图表 '); detailPanel.setContent(formatDiff(log)); detailPanel.setScroll(0); screen.render(); } },
-    { label: '打开 Git 操作菜单', action: actionMenu }
-  ]);
+    { label: '打开 Git 操作菜单', action: menuAnchor => actionMenu(menuAnchor) }
+  ], anchor);
 }
 
 function discardAllChanges() {
@@ -658,21 +845,19 @@ function discardAllChanges() {
   }));
 }
 
-repoList.on('select', (_, index) => { if (state.roots[index] && state.roots[index] !== state.repo) selectRepo(state.roots[index]); });
 historyList.on('select', (_, index) => { if (state.history[index]) showCommit(state.history[index]); });
 refreshButton.on('press', () => perform('刷新', refreshRepo, false));
-actionButton.on('press', actionMenu);
+actionButton.on('press', () => actionMenu(actionButton));
 exitButton.on('press', () => { screen.destroy(); process.exit(0); });
 repoHeader.on('press', () => toggleSection('repositories'));
 commitHeader.on('press', () => toggleSection('commit'));
 changeHeader.on('press', () => toggleSection('changes'));
 historyHeader.on('press', () => toggleSection('history'));
-repoMoreButton.on('press', repositoryMenu);
-commitMoreButton.on('press', actionMenu);
-changeMoreButton.on('press', changesMenu);
-historyMoreButton.on('press', historyMenu);
+commitMoreButton.on('press', () => actionMenu(commitMoreButton));
+changeMoreButton.on('press', () => changesMenu(changeMoreButton));
+historyMoreButton.on('press', () => historyMenu(historyMoreButton));
 commitInput.on('keypress', () => setImmediate(resizeCommitInput));
-addRepoButton.on('press', () => textDialog('添加仓库', '输入 Git 仓库目录的完整路径', async directory => {
+repoAddButton.on('press', () => textDialog('添加仓库', '输入 Git 仓库目录的完整路径', async directory => {
   const root = await findGitRoot(directory);
   if (!root) { toast('该目录不是 Git 仓库', COLORS.red); return; }
   if (!state.roots.includes(root)) state.roots.push(root);
@@ -687,6 +872,8 @@ commitButton.on('press', () => {
 
 screen.on('resize', () => { reflowLeftPanel(); screen.render(); });
 screen.key(['C-c'], () => { screen.destroy(); process.exit(0); });
+process.on('uncaughtException', reportUnhandledError);
+process.on('unhandledRejection', reportUnhandledError);
 
 (async function bootstrap() {
   reflowLeftPanel();
