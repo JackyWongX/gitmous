@@ -33,7 +33,7 @@ module.exports = {
       row += 1;
     }
     this.state.roots.forEach((root, index) => {
-      const active = root === this.state.repo;
+      const active = this.samePath(root, this.state.repo);
       const rowStyle = { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } };
       const branch = active ? ` ${this.escapeTags(this.state.branch)}` : '';
       const indicator = active ? '{green-fg}●{/green-fg}' : ' ';
@@ -50,7 +50,7 @@ module.exports = {
         style: rowStyle
       });
       rowButton.on('press', () => {
-        if (root !== this.state.repo) this.selectRepo(root);
+        if (!this.samePath(root, this.state.repo)) this.selectRepo(root);
       });
       if (active) {
         const branchButton = this.button({
@@ -82,7 +82,7 @@ module.exports = {
   },
 
   async selectRepo(root, options = {}) {
-    this.state.repo = root;
+    this.state.repo = this.path.resolve(root);
     this.state.selected = null;
     this.state.expandedHistory.clear();
     this.state.historyFiles.clear();

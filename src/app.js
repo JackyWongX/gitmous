@@ -50,6 +50,7 @@ class GitUiApp {
 
     this.screen.on('resize', () => { this.reflowLeftPanel(); this.screen.render(); });
     this.screen.on('mouse', data => this.releaseCommitInputIfOutside(data));
+    this.screen.on('mouse', data => this.handleScrollableWheel(data));
     this.screen.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
     process.on('uncaughtException', error => this.reportUnhandledError(error));
     process.on('unhandledRejection', error => this.reportUnhandledError(error));
@@ -68,18 +69,10 @@ class GitUiApp {
       this.screen.render();
       return;
     }
-    if (!this.state.startDirectoryIsGit && this.state.roots.length === 1) {
-      await this.selectRepo(this.state.roots[0], { silentSuccess: true });
-      return;
-    }
-    if (!this.state.startDirectoryIsGit) {
-      this.state.repo = null;
-      this.renderAll();
-      this.detailPanel.setContent(` 当前目录不是 Git 仓库：${supplied}\n\n可以先初始化/克隆，也可以点击下面发现的仓库进行切换。`);
-      this.screen.render();
-      return;
-    }
-    await this.selectRepo(currentRoot || this.state.roots[0], { silentSuccess: true });
+    const defaultRoot = currentRoot
+      ? (this.state.roots.find(root => this.samePath(root, currentRoot)) || currentRoot)
+      : this.state.roots[0];
+    await this.selectRepo(defaultRoot, { silentSuccess: true });
   }
 
   run() {

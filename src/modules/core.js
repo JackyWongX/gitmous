@@ -62,6 +62,16 @@ module.exports = {
     return width;
   },
 
+  normalizePath(value) {
+    if (!value) return '';
+    const resolved = this.path.resolve(value);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  },
+
+  samePath(left, right) {
+    return this.normalizePath(left) === this.normalizePath(right);
+  },
+
   toast(message, color = this.COLORS.accent) {
     const width = Math.min(
       Math.max(18, this.textWidth(message) + 8),
@@ -146,6 +156,17 @@ module.exports = {
     element.childBase = 0;
     element.childOffset = 0;
     if (element.lpos) delete element.lpos._scrollBottom;
+  },
+
+  handleScrollableWheel(data) {
+    if (!data || (data.action !== 'wheelup' && data.action !== 'wheeldown')) return;
+    if (this.activeDropdownMenu && this.pointInside(this.activeDropdownMenu, data)) return;
+    const targets = [this.changeArea, this.historyArea];
+    const target = targets.find(element => element && element.visible && this.pointInside(element, data));
+    if (!target || typeof target.scroll !== 'function') return;
+    const amount = Math.max(1, Math.floor((target.height || 6) / 3));
+    target.scroll(data.action === 'wheelup' ? -amount : amount);
+    this.screen.render();
   },
 
   disposeTree(element) {
