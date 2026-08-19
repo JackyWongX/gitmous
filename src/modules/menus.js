@@ -102,14 +102,84 @@ module.exports = {
     });
   },
 
+  mergeBranchIntoCurrent(sourceBranch) {
+    const targetBranch = this.currentLocalBranch();
+    if (!targetBranch) {
+      this.toast(this.t('noLocalBranchPublish'), this.COLORS.yellow);
+      return;
+    }
+    if (sourceBranch === targetBranch) {
+      this.toast(this.t('cannotMergeCurrentBranch'), this.COLORS.yellow);
+      return;
+    }
+    this.confirm(
+      this.t('mergeBranch'),
+      this.t('mergeBranchDetailConfirm', { source: sourceBranch, target: targetBranch }),
+      () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-edit', sourceBranch]))
+    );
+  },
+
+  deleteLocalBranchWithConfirm(branchName) {
+    if (branchName === this.state.branch) {
+      this.toast(this.t('cannotDeleteCheckedOutBranch'), this.COLORS.yellow);
+      return;
+    }
+    this.confirm(
+      this.t('deleteBranch'),
+      this.t('deleteBranchDetailConfirm', { name: branchName }),
+      () => this.perform(this.t('deleteBranch'), () => this.git(['branch', '-d', branchName]))
+    );
+  },
+
+  mergeRemoteBranchIntoCurrent(remoteBranch) {
+    const targetBranch = this.currentLocalBranch();
+    if (!targetBranch) {
+      this.toast(this.t('noLocalBranchPublish'), this.COLORS.yellow);
+      return;
+    }
+    this.confirm(
+      this.t('mergeBranch'),
+      this.t('mergeRemoteBranchDetailConfirm', { source: remoteBranch, target: targetBranch }),
+      () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-edit', remoteBranch]))
+    );
+  },
+
+  remoteBranchParts(remoteBranch) {
+    const match = String(remoteBranch || '').match(/^([^/]+)\/(.+)$/);
+    if (!match) return null;
+    return { remote: match[1], branch: match[2] };
+  },
+
+  deleteRemoteBranchWithConfirm(remoteBranch) {
+    const parts = this.remoteBranchParts(remoteBranch);
+    if (!parts) {
+      this.toast(this.t('invalidRemoteBranchName', { name: remoteBranch }), this.COLORS.red);
+      return;
+    }
+    this.confirm(
+      this.t('deleteRemoteBranch'),
+      this.t('deleteRemoteBranchDetailConfirm', { remote: parts.remote, branch: parts.branch, name: remoteBranch }),
+      () => this.perform(this.t('deleteRemoteBranch'), () => this.git(['push', parts.remote, '--delete', parts.branch]))
+    );
+  },
+
   async branchSwitchMenu(anchor) {
     const [branches, remotes] = await Promise.all([this.localBranches(), this.remoteBranches()]);
     const entries = [
       { type: 'header', label: this.t('localBranches') },
       ...(branches.length
         ? branches.map(name => ({
+          type: name === this.state.branch ? 'branchCurrent' : 'localBranch',
           label: `${name === this.state.branch ? '{green-fg}●{/green-fg}' : ' '} ${this.escapeTags(name)}`,
-          action: () => name === this.state.branch ? this.toast(this.t('alreadyCurrentBranch')) : this.perform(this.t('switchTo', { name }), () => this.git(['switch', name]))
+          action: () => name === this.state.branch ? this.toast(this.t('alreadyCurrentBranch')) : this.perform(this.t('switchTo', { name }), () => this.git(['switch', name])),
+          mergeTooltip: () => name === this.state.branch
+            ? this.t('cannotMergeCurrentBranch')
+            : this.t('mergeBranchButtonTooltip', { source: name, target: this.state.branch }),
+          deleteTooltip: () => name === this.state.branch
+            ? this.t('cannotDeleteCheckedOutBranch')
+            : this.t('deleteBranchButtonTooltip', { name }),
+          mergeAction: () => this.mergeBranchIntoCurrent(name),
+          deleteAction: () => this.deleteLocalBranchWithConfirm(name)
         }))
         : [{ label: `{gray-fg}${this.t('noLocalBranches')}{/gray-fg}`, action: () => {} }]),
       { label: `{green-fg}+{/green-fg} ${this.t('createLocalBranch')}`, action: () => this.createLocalBranch() },
@@ -117,8 +187,13 @@ module.exports = {
       { type: 'header', label: this.t('remoteBranches') },
       ...(remotes.length
         ? remotes.map(name => ({
+          type: 'remoteBranch',
           label: `  {red-fg}☁ {/red-fg} ${this.escapeTags(name)}`,
-          action: () => this.switchRemoteBranch(name, branches)
+          action: () => this.switchRemoteBranch(name, branches),
+          mergeTooltip: () => this.t('mergeRemoteBranchButtonTooltip', { source: name, target: this.state.branch }),
+          deleteTooltip: () => this.t('deleteRemoteBranchButtonTooltip', { name }),
+          mergeAction: () => this.mergeRemoteBranchIntoCurrent(name),
+          deleteAction: () => this.deleteRemoteBranchWithConfirm(name)
         }))
         : [{ label: `{gray-fg}${this.t('noRemoteBranches')}{/gray-fg}`, action: () => {} }]),
       { label: `{green-fg}+{/green-fg} ${this.t('createRemoteBranch')}`, action: menuAnchor => this.createRemoteBranch(menuAnchor, branches) }

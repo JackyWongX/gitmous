@@ -72,6 +72,15 @@ module.exports = {
     return this.normalizePath(left) === this.normalizePath(right);
   },
 
+  isElementInside(root, element) {
+    let current = element;
+    while (current) {
+      if (current === root) return true;
+      current = current.parent;
+    }
+    return false;
+  },
+
   isDetachedBranchName(branch) {
     return branch === this.t('detachedHead') || branch === '(detached HEAD)' || branch === '\u0028\u5206\u79bb HEAD\u0029';
   },
@@ -337,7 +346,8 @@ module.exports = {
 
   showTooltip(text, anchor) {
     const value = String(text || '').trim();
-    if (!value || this.activeDropdownMenu) return;
+    if (!value) return;
+    if (this.activeDropdownMenu && !this.isElementInside(this.activeDropdownMenu, anchor)) return;
     this.hideTooltip();
     const screenWidth = this.screen.width || 80;
     const screenHeight = this.screen.height || 24;
@@ -580,7 +590,8 @@ module.exports = {
   showMenu(title, entries, anchor) {
     this.closeDropdownMenu();
     const visibleEntries = entries.slice(0, 24);
-    const width = Math.min(64, Math.max(18, this.textWidth(title) + 6, ...visibleEntries.map(entry => this.textWidth(entry.label) + 4)));
+    const entryWidth = entry => this.textWidth(entry.label || '') + (entry.type === 'localBranch' || entry.type === 'remoteBranch' ? 12 : 4);
+    const width = Math.min(64, Math.max(18, this.textWidth(title) + 6, ...visibleEntries.map(entryWidth)));
     const height = Math.max(3, visibleEntries.length + 2);
     const position = this.anchorPosition(anchor, width, height);
     const modal = this.box({
@@ -616,6 +627,64 @@ module.exports = {
           tags: true,
           content: `{cyan-fg}${this.escapeTags(entry.label)}{/cyan-fg}`,
           style: { fg: this.COLORS.accent, bg: this.COLORS.panel, bold: true }
+        });
+        return;
+      }
+      if (entry.type === 'localBranch' || entry.type === 'remoteBranch') {
+        const item = this.button({
+          parent: modal,
+          top: index + 1,
+          left: 1,
+          right: 7,
+          height: 1,
+          shrink: false,
+          tags: true,
+          padding: { left: 1, right: 1 },
+          content: entry.label,
+          style: {
+            fg: this.COLORS.text,
+            bg: this.COLORS.panel,
+            hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt },
+            focus: { fg: this.COLORS.text, bg: this.COLORS.panelAlt }
+          }
+        });
+        item.on('press', () => {
+          const itemAnchor = { lpos: item.lpos, parent: this.screen };
+          this.closeDropdownMenu();
+          this.runUiAction(() => entry.action(itemAnchor), title);
+          this.screen.render();
+        });
+        const mergeButton = this.button({
+          parent: modal,
+          top: index + 1,
+          right: 4,
+          width: 3,
+          height: 1,
+          shrink: false,
+          content: '+',
+          style: this.iconStyle
+        });
+        const deleteButton = this.button({
+          parent: modal,
+          top: index + 1,
+          right: 1,
+          width: 3,
+          height: 1,
+          shrink: false,
+          content: 'x',
+          style: this.iconStyle
+        });
+        this.bindTooltip(mergeButton, entry.mergeTooltip);
+        this.bindTooltip(deleteButton, entry.deleteTooltip);
+        mergeButton.on('press', () => {
+          this.closeDropdownMenu();
+          this.runUiAction(entry.mergeAction, title);
+          this.screen.render();
+        });
+        deleteButton.on('press', () => {
+          this.closeDropdownMenu();
+          this.runUiAction(entry.deleteAction, title);
+          this.screen.render();
         });
         return;
       }
