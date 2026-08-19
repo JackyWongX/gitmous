@@ -50,7 +50,7 @@ module.exports = {
   updateSectionHeader(element, section, text) {
     const content = ` ${this.sectionCaption(this.state.collapsed[section], text)} `;
     element.setContent(content);
-    element.width = this.textWidth(content) + 1;
+    element.width = this.textWidth(content) + 2;
   },
 
   updateCommitPlaceholder() {

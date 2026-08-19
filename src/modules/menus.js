@@ -267,10 +267,4 @@ module.exports = {
     ], anchor);
   },
 
-  repositoryMenu(anchor) {
-    this.showMenu(this.t('repository'), [
-      { label: this.t('refreshCurrentRepository'), action: () => this.perform(this.t('refresh'), () => this.refreshRepo(), false) },
-      { label: this.t('viewCurrentRepositoryPath'), action: () => { this.setDetailText(this.t('repositoryPath'), this.escapeTags(this.state.repo || this.t('notSelected'))); this.screen.render(); } }
-    ], anchor);
-  }
 };

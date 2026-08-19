@@ -14,7 +14,7 @@ module.exports = {
         shrink: false,
         tags: true,
         content: `{green-fg}+{/green-fg} ${this.t('initRepository')}`,
-        style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
+        style: { fg: this.COLORS.accent, bg: this.COLORS.panel, hover: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt } }
       });
       initButton.on('press', () => this.runUiAction(() => this.initializeCurrentDirectory(), this.t('initRepository')));
       row += 1;
@@ -27,7 +27,7 @@ module.exports = {
         shrink: false,
         tags: true,
         content: `{cyan-fg}↓{/cyan-fg} ${this.t('cloneFromRemote')}`,
-        style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
+        style: { fg: this.COLORS.accent, bg: this.COLORS.panel, hover: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt } }
       });
       cloneButton.on('press', () => this.cloneRemoteRepository());
       row += 1;
@@ -35,14 +35,15 @@ module.exports = {
     this.state.roots.forEach((root, index) => {
       const active = this.samePath(root, this.state.repo);
       const rowStyle = { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } };
+      const actionStyle = { fg: this.COLORS.accent, bg: this.COLORS.panel, hover: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt } };
       const branch = active ? ` ${this.escapeTags(this.state.branch)}` : '';
       const indicator = active ? '{green-fg}●{/green-fg}' : ' ';
-      const branchButtonWidth = Math.max(10, this.textWidth(this.t('branchManagement')) + 2);
+      const branchButtonWidth = Math.max(1, this.textWidth(this.t('branchManagement')));
       const rowButton = this.button({
         parent: this.repoContent,
         top: row + index,
         left: 0,
-        right: active ? branchButtonWidth + 6 : 0,
+        right: active ? branchButtonWidth : 0,
         height: 1,
         shrink: false,
         padding: { left: 0, right: 0 },
@@ -57,25 +58,16 @@ module.exports = {
         const branchButton = this.button({
           parent: this.repoContent,
           top: row + index,
-          right: 5,
+          right: 0,
           width: branchButtonWidth,
           height: 1,
           shrink: false,
+          padding: { left: 0, right: 0 },
+          align: 'right',
           content: this.t('branchManagement'),
-          style: rowStyle
-        });
-        const moreButton = this.button({
-          parent: this.repoContent,
-          top: row + index,
-          right: 0,
-          width: 4,
-          height: 1,
-          shrink: false,
-          content: '...',
-          style: rowStyle
+          style: actionStyle
         });
         branchButton.on('press', () => this.branchSwitchMenu(branchButton));
-        moreButton.on('press', () => this.repositoryMenu(moreButton));
       }
     });
     this.repoContent.height = Math.max(1, row + this.state.roots.length);

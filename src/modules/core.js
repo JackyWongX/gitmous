@@ -13,13 +13,14 @@ module.exports = {
 
   button(options) {
     const { style = {}, ...buttonOptions } = options;
-    return this.blessed.button({
+    const usesThemeColor = !Object.prototype.hasOwnProperty.call(style, 'fg') || style.fg === this.COLORS.accent;
+    const button = this.blessed.button({
       mouse: true,
       keys: false,
       shrink: true,
       padding: { left: 1, right: 1 },
       style: {
-        fg: this.COLORS.text,
+        fg: this.COLORS.accent,
         bg: this.COLORS.panel,
         focus: { fg: this.COLORS.accent, bold: true },
         hover: { fg: this.COLORS.accent },
@@ -27,6 +28,8 @@ module.exports = {
       },
       ...buttonOptions
     });
+    button.__themeButton = usesThemeColor;
+    return button;
   },
 
   setVisible(element, visible) {
@@ -70,6 +73,51 @@ module.exports = {
 
   samePath(left, right) {
     return this.normalizePath(left) === this.normalizePath(right);
+  },
+
+  normalizeColorValue(value) {
+    const text = String(value || '').trim();
+    const hex = text.match(/^#?([0-9a-f]{6})$/i);
+    if (hex) return `#${hex[1].toLowerCase()}`;
+    const rgb = text.match(/^rgb\s*\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/i);
+    if (!rgb) return '';
+    const values = rgb.slice(1).map(Number);
+    if (values.some(item => item < 0 || item > 255)) return '';
+    return `#${values.map(item => item.toString(16).padStart(2, '0')).join('')}`;
+  },
+
+  setElementAccent(element) {
+    if (!element || !element.style) return;
+    if (element.__themeButton) {
+      element.style.fg = this.COLORS.accent;
+      if (element.style.hover) element.style.hover.fg = this.COLORS.accent;
+      if (element.style.focus) element.style.focus.fg = this.COLORS.accent;
+    }
+    if (element.style.border && element.__themeAccentBorder) element.style.border.fg = this.COLORS.accent;
+    if (element.scrollbar && element.scrollbar.style) element.scrollbar.style.bg = this.COLORS.accent;
+    if (element.children) element.children.forEach(child => this.setElementAccent(child));
+  },
+
+  applyThemeColor() {
+    this.iconStyle.fg = this.COLORS.accent;
+    this.setElementAccent(this.screen);
+    this.renderAll();
+    this.screen.render();
+  },
+
+  setThemeColor(value) {
+    const color = this.normalizeColorValue(value);
+    if (!color) {
+      this.toast(this.t('invalidThemeColor'), this.COLORS.red);
+      return;
+    }
+    this.COLORS.accent = color;
+    this.applyThemeColor();
+    this.toast(this.t('themeColorChanged', { color }), this.COLORS.accent);
+  },
+
+  openThemeColorDialog() {
+    this.inputDialog(this.t('setThemeColor'), this.t('themeColorPlaceholder'), value => this.setThemeColor(value));
   },
 
   isElementInside(root, element) {
@@ -131,9 +179,12 @@ module.exports = {
 
   languageMenu(anchor) {
     const mark = language => (this.language === language ? '{green-fg}●{/green-fg}' : ' ');
-    this.showMenu(this.t('language'), [
+    this.showMenu(this.t('settingsTitle'), [
+      { type: 'header', label: this.t('language') },
       { label: `${mark('en')} ${this.t('english')}`, action: () => this.setLanguage('en') },
-      { label: `${mark('zh')} ${this.t('chinese')}`, action: () => this.setLanguage('zh') }
+      { label: `${mark('zh')} ${this.t('chinese')}`, action: () => this.setLanguage('zh') },
+      { type: 'separator', label: '' },
+      { label: this.t('setThemeColor'), action: () => this.openThemeColorDialog() }
     ], anchor);
   },
 
@@ -603,6 +654,7 @@ module.exports = {
       label: ` ${title} `,
       style: { fg: this.COLORS.text, bg: this.COLORS.panel, border: { fg: this.COLORS.accent } }
     });
+    modal.__themeAccentBorder = true;
     this.activeDropdownMenu = modal;
     visibleEntries.forEach((entry, index) => {
       if (entry.type === 'separator') {
@@ -699,12 +751,13 @@ module.exports = {
         padding: { left: 1, right: 1 },
         content: entry.label,
         style: {
-          fg: this.COLORS.text,
+          fg: this.COLORS.accent,
           bg: this.COLORS.panel,
-          hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt },
-          focus: { fg: this.COLORS.text, bg: this.COLORS.panelAlt }
+          hover: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt },
+          focus: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt }
         }
       });
+      item.__themeButton = true;
       item.on('press', () => {
         const itemAnchor = { lpos: item.lpos, parent: this.screen };
         this.closeDropdownMenu();

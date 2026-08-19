@@ -23,7 +23,7 @@ function createLayout(app) {
 
   app.screen = screen;
   app.regionBorder = { type: 'line', fg: COLORS.border };
-  app.iconStyle = { fg: 'brightwhite', bg: COLORS.panel, bold: true };
+  app.iconStyle = { fg: COLORS.accent, bg: COLORS.panel, bold: true };
   app.fileRowHoverBg = COLORS.panelAlt;
 
   app.header = blessed.box({
@@ -48,12 +48,12 @@ function createLayout(app) {
   app.detailToggleButton.hide();
   app.languageButton = app.button({ parent: screen, top: 0, right: 1, width: 4, height: 1, content: app.t('settings'), align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
 
-  app.repoHeader = app.button({ parent: app.repoPanel, top: 0, left: 2, width: 10, height: 1, tags: true, content: ` ▾ ${app.t('repositories')} ` });
+  app.repoHeader = app.button({ parent: app.repoPanel, top: 0, left: 2, width: 10, height: 1, tags: true, padding: { left: 0, right: 0 }, content: ` ▾ ${app.t('repositories')} ` });
   app.repoAddButton = app.button({ parent: app.repoPanel, top: 0, right: 1, width: 3, height: 1, content: '+', style: app.iconStyle });
   app.repoArea = blessed.box({ parent: app.repoPanel, top: 1, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.repoContent = blessed.box({ parent: app.repoArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
-  app.commitHeader = app.button({ parent: app.workPanel, top: 0, left: 2, width: 8, height: 1, tags: true, content: ` ▾ ${app.t('commit')} ` });
+  app.commitHeader = app.button({ parent: app.workPanel, top: 0, left: 2, width: 8, height: 1, tags: true, padding: { left: 0, right: 0 }, content: ` ▾ ${app.t('commit')} ` });
   app.commitInput = blessed.textarea({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, inputOnFocus: false, keys: false, tags: false, style: { fg: COLORS.text, bg: COLORS.panel, focus: { fg: COLORS.text, bg: COLORS.panel } } });
   app.commitPlaceholder = blessed.box({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, tags: false, content: app.t('commitPlaceholder'), style: { fg: COLORS.dim, bg: COLORS.panel } });
   app.commitButton = app.button({
@@ -75,11 +75,11 @@ function createLayout(app) {
     }
   });
 
-  app.changeHeader = app.button({ parent: app.changePanel, top: 0, left: 2, width: 8, height: 1, tags: true, content: ` ▾ ${app.t('changes')} ` });
+  app.changeHeader = app.button({ parent: app.changePanel, top: 0, left: 2, width: 8, height: 1, tags: true, padding: { left: 0, right: 0 }, content: ` ▾ ${app.t('changes')} ` });
   app.changeArea = blessed.box({ parent: app.changePanel, top: 1, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.changeContent = blessed.box({ parent: app.changeArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
-  app.historyHeader = app.button({ parent: app.historyPanel, top: 0, left: 2, width: 12, height: 1, tags: true, content: ` ▾ ${app.t('history')} ` });
+  app.historyHeader = app.button({ parent: app.historyPanel, top: 0, left: 2, width: 12, height: 1, tags: true, padding: { left: 0, right: 0 }, content: ` ▾ ${app.t('history')} ` });
   app.historyArea = blessed.box({ parent: app.historyPanel, top: 1, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.historyContent = blessed.box({ parent: app.historyArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 }
