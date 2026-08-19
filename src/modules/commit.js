@@ -13,7 +13,7 @@ module.exports = {
   commitActionState() {
     if (this.state.status.staged.length > 0 || this.hasAnyChanges()) return { mode: 'commit', label: '提交' };
     if (!this.state.repo) return { mode: 'none', label: '提交' };
-    if (!this.state.upstream) return { mode: 'publish', label: '发布分支(推送到指定的远程地址)' };
+    if (!this.state.upstream) return { mode: 'publish', label: '发布分支' };
     if (this.state.behind > 0) return { mode: 'pull', label: '↓ 拉取' };
     return { mode: 'push', label: '↑ 推送' };
   },

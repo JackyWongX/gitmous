@@ -114,17 +114,6 @@ module.exports = {
         })
       },
       {
-        label: '{red-fg}还原到当前{/red-fg}',
-        action: async () => {
-          const fullHash = await this.resolveCommitHash(commit);
-          this.confirm(
-            '还原到当前提交',
-            `这会执行 git reset --hard ${fullHash}\n\n当前分支会回退到该提交；该提交之后的提交会从当前分支历史中移除，已跟踪文件的未提交修改也会丢失。\n\n确定继续吗？`,
-            () => this.perform('还原到当前提交', () => this.git(['reset', '--hard', fullHash]))
-          );
-        }
-      },
-      {
         label: '复制hash',
         action: () => this.perform('复制hash', async () => {
           const fullHash = await this.resolveCommitHash(commit);
@@ -138,6 +127,17 @@ module.exports = {
           const content = await this.git(['show', '--stat', '--patch', '--decorate=full', '--find-renames', fullHash]);
           await this.writeClipboard(content);
         }, false)
+      },
+      {
+        label: '{red-fg}还原到当前{/red-fg}',
+        action: async () => {
+          const fullHash = await this.resolveCommitHash(commit);
+          this.confirm(
+            '还原到当前提交',
+            `这会执行 git reset --hard ${fullHash}\n\n当前分支会回退到该提交；该提交之后的提交会从当前分支历史中移除，已跟踪文件的未提交修改也会丢失。\n\n确定继续吗？`,
+            () => this.perform('还原到当前提交', () => this.git(['reset', '--hard', fullHash]))
+          );
+        }
       }
     ], anchor);
   }
