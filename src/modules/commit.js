@@ -115,7 +115,11 @@ module.exports = {
     }
     const message = this.commitInput.getValue().trim();
     if (!message) { this.toast('请输入提交消息', this.COLORS.yellow); this.commitInput.focus(); this.screen.render(); return; }
-    if (!this.state.status.staged.length) { this.toast('没有已暂存的更改', this.COLORS.yellow); return; }
-    this.runUiAction(() => this.perform('提交', async () => { await this.git(['commit', '-m', message]); this.commitInput.clearValue(); this.resizeCommitInput(); }), '提交');
+    this.runUiAction(() => this.perform('提交', async () => {
+      if (!this.state.status.staged.length) await this.git(['add', '-A']);
+      await this.git(['commit', '-m', message]);
+      this.commitInput.clearValue();
+      this.resizeCommitInput();
+    }), '提交');
   }
 };

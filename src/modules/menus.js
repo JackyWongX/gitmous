@@ -14,7 +14,7 @@ module.exports = {
     }
     const remotes = this.state.remotes.length ? this.state.remotes : (await this.git(['remote']).catch(() => '')).split(/\r?\n/).filter(Boolean);
     if (!remotes.length) {
-      this.textDialog('发布分支', '输入远程仓库地址，例如 https://example.com/repo.git', url => this.perform('发布分支', async () => {
+      this.inputDialog('发布分支', '输入或粘贴远程仓库地址，例如 https://example.com/repo.git', url => this.perform('发布分支', async () => {
         await this.git(['remote', 'add', 'origin', url]);
         await this.git(['push', '-u', 'origin', branch]);
       }));

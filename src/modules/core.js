@@ -264,6 +264,45 @@ module.exports = {
     this.screen.render();
   },
 
+  inputDialog(title, placeholder, submit) {
+    const modal = this.box({ parent: this.screen, top: 'center', left: 'center', width: 78, height: 8, label: ` ${title} `, style: { fg: this.COLORS.text, bg: '#182235', border: { fg: this.COLORS.accent } } });
+    const input = this.blessed.textbox({
+      parent: modal,
+      top: 1,
+      left: 2,
+      right: 2,
+      height: 3,
+      mouse: true,
+      inputOnFocus: true,
+      keys: true,
+      value: '',
+      border: 'line',
+      style: { fg: this.COLORS.text, bg: '#101722', border: { fg: this.COLORS.border }, focus: { border: { fg: this.COLORS.accent } } }
+    });
+    const hint = this.blessed.box({ parent: modal, top: 4, left: 2, right: 2, height: 1, content: this.escapeTags(placeholder), style: { fg: this.COLORS.dim, bg: '#182235' } });
+    const cancel = this.button({ parent: modal, bottom: 1, left: 2, width: 11, content: '取消' });
+    const ok = this.button({ parent: modal, bottom: 1, right: 2, width: 14, content: '确认' });
+    const finish = () => {
+      const value = input.getValue().trim();
+      if (!value) { this.toast('请输入内容', this.COLORS.yellow); return; }
+      if (input._reading && typeof input._done === 'function') input._done('stop');
+      this.destroyElement(modal);
+      this.runUiAction(() => submit(value), title);
+      this.screen.render();
+    };
+    hint.on('click', () => { input.focus(); input.readInput(); this.screen.render(); });
+    input.on('submit', finish);
+    cancel.on('press', () => {
+      if (input._reading && typeof input._done === 'function') input._done('stop');
+      this.destroyElement(modal);
+      this.screen.render();
+    });
+    ok.on('press', finish);
+    input.focus();
+    input.readInput();
+    this.screen.render();
+  },
+
   showMenu(title, entries, anchor) {
     this.closeDropdownMenu();
     const visibleEntries = entries.slice(0, 18);
