@@ -59,6 +59,7 @@ function box(options) {
 }
 
 function button(options) {
+  const { style = {}, ...buttonOptions } = options;
   return blessed.button({
     mouse: true,
     keys: false,
@@ -66,11 +67,12 @@ function button(options) {
     padding: { left: 1, right: 1 },
     style: {
       fg: COLORS.text,
-      bg: COLORS.panelAlt,
-      focus: { bg: COLORS.accent, fg: '#07131d' },
-      hover: { bg: '#2d4960' }
+      bg: COLORS.panel,
+      focus: { fg: COLORS.accent, bold: true },
+      hover: { fg: COLORS.accent },
+      ...style
     },
-    ...options
+    ...buttonOptions
   });
 }
 
@@ -79,42 +81,42 @@ const header = blessed.box({
   tags: true, mouse: true, style: { fg: COLORS.text, bg: '#111a28' },
   content: ' {bold}GitUI Mouse{/bold}  {gray-fg}VS Code 风格的终端源码管理{/gray-fg}'
 });
-screen.append(header);
 
 const refreshButton = button({ parent: header, right: 33, top: 1, content: '刷新' });
 const actionButton = button({ parent: header, right: 22, top: 1, content: '操作' });
 const exitButton = button({ parent: header, right: 11, top: 1, content: '退出' });
 
-const leftPanel = blessed.box({ left: 0, top: 3, width: '42%', bottom: 2, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
-const repoPanel = blessed.box({ parent: leftPanel, top: 0, left: 0, right: 0, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
-const workPanel = blessed.box({ parent: leftPanel, left: 0, right: 0, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
-const changePanel = blessed.box({ parent: leftPanel, left: 0, right: 0, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
-const historyPanel = blessed.box({ parent: leftPanel, left: 0, right: 0, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
-const detailPanel = box({ left: '42%', top: 3, right: 0, bottom: 2, label: ' 文件修改对比 ', scrollable: true, alwaysScroll: true, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+const leftPanel = blessed.box({ left: 0, top: 0, width: '42%', bottom: 0, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
+const regionBorder = { type: 'line', fg: COLORS.border };
+const repoPanel = blessed.box({ parent: leftPanel, top: 0, left: 0, right: 0, mouse: true, border: regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
+const workPanel = blessed.box({ parent: leftPanel, left: 0, right: 0, mouse: true, border: regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
+const changePanel = blessed.box({ parent: leftPanel, left: 0, right: 0, mouse: true, border: regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
+const historyPanel = blessed.box({ parent: leftPanel, left: 0, right: 0, mouse: true, border: regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
+const detailPanel = box({ left: '42%', top: 0, right: 0, bottom: 0, border: regionBorder, label: ' 文件修改对比 ', scrollable: true, alwaysScroll: true, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
 const footer = blessed.box({ left: 0, bottom: 0, width: '100%', height: 2, tags: true, style: { fg: COLORS.dim, bg: '#111a28' }, content: ' 鼠标点击所有操作 · 提交消息可直接键盘输入 · 破坏性操作会要求确认' });
 screen.append(detailPanel);
 screen.append(leftPanel);
-screen.append(footer);
 
-const repoHeader = button({ parent: repoPanel, top: 0, left: 0, right: 6, height: 1, tags: true, content: '▾ 存储库' });
-const repoMoreButton = button({ parent: repoPanel, top: 0, right: 0, width: 6, height: 1, content: '...' });
-const repoList = blessed.list({ parent: repoPanel, top: 1, left: 0, right: 0, bottom: 2, mouse: true, tags: true, keys: false, vi: false, style: { selected: { bg: COLORS.accent, fg: '#06131b' }, item: { fg: COLORS.text } }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
-const addRepoButton = button({ parent: repoPanel, bottom: 1, left: 1, content: '+ 添加仓库' });
+const repoHeader = button({ parent: repoPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 存储库' });
+const repoMoreButton = button({ parent: repoPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
+const repoList = blessed.list({ parent: repoPanel, top: 2, left: 1, right: 1, bottom: 3, mouse: true, tags: true, keys: false, vi: false, style: { selected: { bg: COLORS.accent, fg: '#06131b' }, item: { fg: COLORS.text } }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+const addRepoButton = button({ parent: repoPanel, bottom: 1, left: 2, width: 12, content: '+ 添加仓库' });
 
-const commitHeader = button({ parent: workPanel, top: 0, left: 0, right: 6, height: 1, tags: true, content: '▾ 提交' });
-const commitMoreButton = button({ parent: workPanel, top: 0, right: 0, width: 6, height: 1, content: '...' });
-const commitInput = blessed.textbox({ parent: workPanel, top: 1, left: 1, right: 13, height: 3, mouse: true, inputOnFocus: true, keys: true, tags: false, border: 'line', style: { fg: COLORS.text, bg: '#121925', border: { fg: COLORS.border }, focus: { border: { fg: COLORS.accent } } } });
-const commitButton = button({ parent: workPanel, top: 1, right: 1, width: 11, height: 3, align: 'center', valign: 'middle', content: '提交' });
+const commitHeader = button({ parent: workPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 提交' });
+const commitMoreButton = button({ parent: workPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
+const commitInput = blessed.textarea({ parent: workPanel, top: 2, left: 2, right: 14, height: 3, mouse: true, inputOnFocus: true, keys: false, tags: false, border: 'line', style: { fg: COLORS.text, bg: '#121925', border: { fg: COLORS.border }, focus: { border: { fg: COLORS.accent } } } });
+const commitButton = button({ parent: workPanel, top: 2, right: 2, width: 11, height: 3, align: 'center', valign: 'middle', content: '提交' });
 
-const changeHeader = button({ parent: changePanel, top: 0, left: 0, right: 27, height: 1, tags: true, content: '▾ 更改' });
-const stageAllButton = button({ parent: changePanel, top: 0, right: 18, width: 9, height: 1, content: '暂存全部' });
-const unstageAllButton = button({ parent: changePanel, top: 0, right: 9, width: 9, height: 1, content: '取消暂存' });
-const changeMoreButton = button({ parent: changePanel, top: 0, right: 0, width: 6, height: 1, content: '...' });
-const changeArea = blessed.box({ parent: changePanel, top: 1, left: 0, right: 0, bottom: 0, mouse: true, scrollable: true, alwaysScroll: true, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+const changeHeader = button({ parent: changePanel, top: 1, left: 1, right: 6, height: 1, tags: true, content: '▾ 更改' });
+const iconStyle = { fg: 'brightwhite', bg: COLORS.panel, bold: true };
+const fileRowHoverBg = COLORS.panelAlt;
+const changeMoreButton = button({ parent: changePanel, top: 1, right: 1, width: 4, height: 1, content: '...' });
+const changeArea = blessed.box({ parent: changePanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, scrollable: true, alwaysScroll: true, style: { fg: COLORS.text, bg: COLORS.panel }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+const changeContent = blessed.box({ parent: changeArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
-const historyHeader = button({ parent: historyPanel, top: 0, left: 0, right: 6, height: 1, tags: true, content: '▾ 图表' });
-const historyMoreButton = button({ parent: historyPanel, top: 0, right: 0, width: 6, height: 1, content: '...' });
-const historyList = blessed.list({ parent: historyPanel, top: 1, left: 0, right: 0, bottom: 0, mouse: true, tags: true, keys: false, style: { selected: { bg: '#2b607b', fg: COLORS.text }, item: { fg: COLORS.text } }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+const historyHeader = button({ parent: historyPanel, top: 1, left: 1, right: 7, height: 1, tags: true, content: '▾ 图表' });
+const historyMoreButton = button({ parent: historyPanel, top: 1, right: 1, width: 6, height: 1, content: '...' });
+const historyList = blessed.list({ parent: historyPanel, top: 2, left: 1, right: 1, bottom: 1, mouse: true, tags: true, keys: false, style: { selected: { bg: '#2b607b', fg: COLORS.text }, item: { fg: COLORS.text } }, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
 
 function setVisible(element, visible) {
   if (visible) element.show();
@@ -125,12 +127,18 @@ function sectionCaption(collapsed, text) {
   return `${collapsed ? '▸' : '▾'} ${text}`;
 }
 
+function commitInputRows() {
+  const lines = commitInput.getValue().split('\n').length;
+  return Math.min(10, Math.max(3, lines + 2));
+}
+
 function reflowLeftPanel() {
-  const rows = Math.max(19, (screen.height || 24) - 5);
-  const repoHeight = state.collapsed.repositories ? 1 : Math.min(7, Math.max(5, Math.floor(rows * 0.2)));
-  const commitHeight = state.collapsed.commit ? 1 : 5;
-  const historyHeight = state.collapsed.history ? 1 : Math.max(6, Math.floor(rows * 0.34));
-  const changeHeight = state.collapsed.changes ? 1 : Math.max(3, rows - repoHeight - commitHeight - historyHeight);
+  const rows = Math.max(22, screen.height || 24);
+  const repoHeight = state.collapsed.repositories ? 3 : Math.min(8, Math.max(7, Math.floor(rows * 0.2)));
+  const inputHeight = commitInputRows();
+  const commitHeight = state.collapsed.commit ? 3 : inputHeight + 3;
+  const historyHeight = state.collapsed.history ? 3 : Math.max(6, Math.floor(rows * 0.34));
+  const changeHeight = state.collapsed.changes ? 3 : Math.max(5, rows - repoHeight - commitHeight - historyHeight);
   const actualHistoryHeight = state.collapsed.changes ? rows - repoHeight - commitHeight - changeHeight : historyHeight;
   let top = 0;
   repoPanel.top = top;
@@ -138,6 +146,8 @@ function reflowLeftPanel() {
   top += repoHeight;
   workPanel.top = top;
   workPanel.height = commitHeight;
+  commitInput.height = inputHeight;
+  commitButton.height = inputHeight;
   top += commitHeight;
   changePanel.top = top;
   changePanel.height = changeHeight;
@@ -153,10 +163,14 @@ function reflowLeftPanel() {
   setVisible(addRepoButton, !state.collapsed.repositories);
   setVisible(commitInput, !state.collapsed.commit);
   setVisible(commitButton, !state.collapsed.commit);
-  setVisible(stageAllButton, !state.collapsed.changes);
-  setVisible(unstageAllButton, !state.collapsed.changes);
   setVisible(changeArea, !state.collapsed.changes);
   setVisible(historyList, !state.collapsed.history);
+}
+
+function resizeCommitInput() {
+  if (state.collapsed.commit) return;
+  reflowLeftPanel();
+  screen.render();
 }
 
 function toggleSection(section) {
@@ -285,48 +299,147 @@ function renderRepositories() {
   if (state.repo) repoList.select(Math.max(0, state.roots.indexOf(state.repo)));
 }
 
-function clearChildren(element) {
-  [...element.children].forEach(child => child.destroy());
+function statusMarker(code) {
+  if (code === '??' || code.includes('A')) return { label: 'A', tag: 'green-fg' };
+  if (code.includes('D')) return { label: 'D', tag: 'red-fg' };
+  if (code.includes('R')) return { label: 'R', tag: 'magenta-fg' };
+  return { label: 'M', tag: 'yellow-fg' };
 }
 
-function statusLabel(code) {
-  if (code === '??') return '{yellow-fg}U{/yellow-fg}';
-  if (code.includes('D')) return '{red-fg}D{/red-fg}';
-  if (code.includes('A')) return '{green-fg}A{/green-fg}';
-  if (code.includes('R')) return '{purple-fg}R{/purple-fg}';
-  return '{yellow-fg}M{/yellow-fg}';
+function unregisterTree(element) {
+  if (!element || !element.screen) return;
+  const removeFrom = list => {
+    let index = list.indexOf(element);
+    while (index !== -1) {
+      list.splice(index, 1);
+      index = list.indexOf(element);
+    }
+  };
+  removeFrom(element.screen.clickable || []);
+  removeFrom(element.screen.keyable || []);
+  [...element.children].forEach(unregisterTree);
+}
+
+function resetScrollable(element) {
+  element.childBase = 0;
+  element.childOffset = 0;
+  if (element.lpos) delete element.lpos._scrollBottom;
+}
+
+function clearChildren(element) {
+  [...element.children].forEach(child => {
+    unregisterTree(child);
+    child.destroy();
+  });
+  element.children.length = 0;
+  resetScrollable(element);
+}
+
+function isLiveRowState(rowState) {
+  return rowState.elements.every(element => element.parent);
+}
+
+function applyFileRowState(rowState) {
+  if (!isLiveRowState(rowState)) return;
+  const bg = rowState.rowHover || rowState.groupHover ? fileRowHoverBg : COLORS.panel;
+  rowState.elements.forEach(element => {
+    element.style.bg = bg;
+    if (element.style.hover) element.style.hover.bg = bg;
+  });
+}
+
+function setRowHover(rowState, hovered) {
+  if (!isLiveRowState(rowState)) return;
+  rowState.rowHover = hovered;
+  applyFileRowState(rowState);
+  screen.render();
+}
+
+function bindFileRowHover(rowState) {
+  rowState.elements.forEach(element => {
+    element.on('mouseover', () => setRowHover(rowState, true));
+    element.on('mouseout', () => setRowHover(rowState, false));
+  });
+}
+
+function setGroupHover(rowStates, hovered) {
+  if (!rowStates.every(isLiveRowState)) return;
+  rowStates.forEach(rowState => {
+    rowState.groupHover = hovered;
+    applyFileRowState(rowState);
+  });
+  screen.render();
+}
+
+function bindGroupActionHover(actionButtons, rowStates) {
+  actionButtons.forEach(actionButton => {
+    actionButton.on('mouseover', () => setGroupHover(rowStates, true));
+    actionButton.on('mouseout', () => setGroupHover(rowStates, false));
+  });
 }
 
 function addFileGroup(title, files, mode, top) {
   const folded = state.collapsed[mode];
-  const heading = button({ parent: changeArea, top, left: 0, right: 0, height: 1, tags: true, content: `${sectionCaption(folded, title)} {gray-fg}(${files.length}){/gray-fg}`, style: { fg: COLORS.text, bg: COLORS.panel, hover: { bg: '#2d4960' } } });
+  const staged = mode === 'staged';
+  const actionButtons = [];
+  const rowStates = [];
+  const heading = button({ parent: changeContent, top, left: 0, right: staged ? 3 : 6, height: 1, shrink: false, tags: true, content: `${sectionCaption(folded, title)} {gray-fg}(${files.length}){/gray-fg}` });
   heading.on('press', () => {
     state.collapsed[mode] = !state.collapsed[mode];
     renderChanges();
     screen.render();
   });
-  if (folded) return top + 1;
+  if (staged) {
+    const unstageAll = button({ parent: changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '-', style: iconStyle });
+    actionButtons.push(unstageAll);
+    unstageAll.on('press', () => perform('取消所有暂存', () => git(['reset', 'HEAD']).catch(() => git(['rm', '--cached', '-r', '--ignore-unmatch', '--', '.']))));
+  } else {
+    const discardAll = button({ parent: changeContent, top, right: 3, width: 3, height: 1, shrink: false, content: '-', style: iconStyle });
+    const stageAll = button({ parent: changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '+', style: iconStyle });
+    actionButtons.push(discardAll, stageAll);
+    discardAll.on('press', discardAllChanges);
+    stageAll.on('press', () => perform('暂存所有更改', () => git(['add', '-A'])));
+  }
+  if (folded) {
+    bindGroupActionHover(actionButtons, rowStates);
+    return top + 1;
+  }
   let row = top + 1;
   for (const item of files) {
-    const main = button({ parent: changeArea, top: row, left: 0, right: 13, height: 1, tags: true, content: `${statusLabel(item.code)} ${escapeTags(item.file)}`, style: { fg: COLORS.text, bg: COLORS.panel, hover: { bg: '#2d4960' } } });
-    const view = button({ parent: changeArea, top: row, right: 7, width: 7, height: 1, content: '查看' });
-    const destructive = mode === 'unstaged' || mode === 'untracked';
-    const side = button({ parent: changeArea, top: row, right: 0, width: 7, height: 1, content: destructive ? '丢弃' : '取消' });
-    main.on('press', () => mode === 'staged' ? unstage(item.file) : stage(item.file));
-    view.on('press', () => showFileDiff(item, mode === 'staged'));
-    side.on('press', () => destructive ? discard(item.file, mode === 'untracked') : unstage(item.file));
+    const marker = statusMarker(item.code);
+    const rowBg = blessed.box({ parent: changeContent, top: row, left: 0, right: 0, height: 1, style: { bg: COLORS.panel } });
+    const rowElements = [rowBg];
+    const main = button({ parent: changeContent, top: row, left: 2, right: staged ? 3 : 6, height: 1, shrink: false, padding: { left: 0, right: 0 }, tags: true, content: `{${marker.tag}}${marker.label}{/${marker.tag}}  ${escapeTags(item.file)}` });
+    rowElements.push(main);
+    main.on('press', () => showFileDiff(item, staged));
+    if (staged) {
+      const unstageButton = button({ parent: changeContent, top: row, right: 0, width: 3, height: 1, shrink: false, content: '-', style: iconStyle });
+      rowElements.push(unstageButton);
+      unstageButton.on('press', () => unstage(item.file));
+    } else {
+      const undoButton = button({ parent: changeContent, top: row, right: 3, width: 3, height: 1, shrink: false, content: '-', style: iconStyle });
+      const stageButton = button({ parent: changeContent, top: row, right: 0, width: 3, height: 1, shrink: false, content: '+', style: iconStyle });
+      rowElements.push(undoButton, stageButton);
+      undoButton.on('press', () => discard(item.file, item.code === '??'));
+      stageButton.on('press', () => stage(item.file));
+    }
+    const rowState = { elements: rowElements, rowHover: false, groupHover: false };
+    rowStates.push(rowState);
+    bindFileRowHover(rowState);
     row += 1;
   }
+  bindGroupActionHover(actionButtons, rowStates);
   return row;
 }
 
 function renderChanges() {
-  clearChildren(changeArea);
+  clearChildren(changeContent);
   let top = 0;
   top = addFileGroup('暂存的更改', state.status.staged, 'staged', top);
-  top = addFileGroup('更改', state.status.unstaged, 'unstaged', top);
-  top = addFileGroup('未跟踪的文件', state.status.untracked, 'untracked', top);
-  if (top === 0) blessed.box({ parent: changeArea, top: 1, left: 1, content: '{green-fg}工作区干净{/green-fg}', tags: true });
+  top = addFileGroup('更改', [...state.status.unstaged, ...state.status.untracked], 'unstaged', top);
+  if (top === 0) blessed.box({ parent: changeContent, top: 1, left: 1, content: '{green-fg}工作区干净{/green-fg}', tags: true });
+  changeContent.height = Math.max(1, top + 1);
+  resetScrollable(changeArea);
 }
 
 function renderHistory() {
@@ -548,19 +661,18 @@ repoMoreButton.on('press', repositoryMenu);
 commitMoreButton.on('press', actionMenu);
 changeMoreButton.on('press', changesMenu);
 historyMoreButton.on('press', historyMenu);
+commitInput.on('keypress', () => setImmediate(resizeCommitInput));
 addRepoButton.on('press', () => textDialog('添加仓库', '输入 Git 仓库目录的完整路径', async directory => {
   const root = await findGitRoot(directory);
   if (!root) { toast('该目录不是 Git 仓库', COLORS.red); return; }
   if (!state.roots.includes(root)) state.roots.push(root);
   await selectRepo(root);
 }));
-stageAllButton.on('press', () => perform('暂存所有更改', () => git(['add', '-A'])));
-unstageAllButton.on('press', () => perform('取消所有暂存', () => git(['reset', 'HEAD']).catch(() => git(['rm', '--cached', '-r', '--ignore-unmatch', '--', '.']))));
 commitButton.on('press', () => {
   const message = commitInput.getValue().trim();
   if (!message) { toast('请输入提交消息', COLORS.yellow); commitInput.focus(); screen.render(); return; }
   if (!state.status.staged.length) { toast('没有已暂存的更改', COLORS.yellow); return; }
-  confirm('创建提交', `使用以下提交消息：\n${message}`, () => perform('提交', async () => { await git(['commit', '-m', message]); commitInput.clearValue(); }));
+  confirm('创建提交', `使用以下提交消息：\n${message}`, () => perform('提交', async () => { await git(['commit', '-m', message]); commitInput.clearValue(); resizeCommitInput(); }));
 });
 
 screen.on('resize', () => { reflowLeftPanel(); screen.render(); });
