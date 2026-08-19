@@ -4,11 +4,12 @@ module.exports = {
   renderHistory() {
     this.clearChildren(this.historyContent);
     let row = 0;
-    this.state.history.forEach(commit => {
+    this.state.history.forEach((commit, index) => {
       const expanded = this.state.expandedHistory.has(commit.hash);
       const remoteBranches = this.state.remoteRefs.get(commit.fullHash) || [];
       const hasRemoteMarker = remoteBranches.length > 0;
-      const markerWidth = hasRemoteMarker ? 3 : 0;
+      const rightMarker = this.historyRightMarker(remoteBranches, index === 0);
+      const markerWidth = rightMarker ? Math.min(36, Math.max(3, this.textWidth(rightMarker) + 1)) : 0;
       const commitButton = this.blessed.box({
         parent: this.historyContent,
         top: row,
@@ -20,7 +21,7 @@ module.exports = {
         content: `${expanded ? '▾' : '▸'} {cyan-fg}${this.escapeTags(commit.hash)}{/cyan-fg} ${this.escapeTags(commit.subject)}`,
         style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
       });
-      if (hasRemoteMarker) {
+      if (rightMarker) {
         this.blessed.box({
           parent: this.historyContent,
           top: row,
@@ -28,9 +29,9 @@ module.exports = {
           width: markerWidth,
           height: 1,
           tags: true,
-          align: 'center',
-          content: '☁',
-          style: { fg: this.COLORS.red, bg: this.COLORS.panel, bold: true }
+          align: 'right',
+          content: rightMarker,
+          style: { fg: this.COLORS.text, bg: this.COLORS.panel, bold: true }
         });
       }
       commitButton.on('click', data => {
@@ -75,6 +76,30 @@ module.exports = {
     });
     this.historyContent.height = Math.max(1, row);
     this.resetScrollable(this.historyArea);
+  },
+
+  historyRightMarker(remoteBranches, isLatestCommit) {
+    const parts = [];
+    const branchName = this.latestBranchMarker(isLatestCommit);
+    if (branchName) parts.push(`{blue-fg}${this.escapeTags(branchName)}{/blue-fg}`);
+    const remoteMarker = this.remoteBranchMarker(remoteBranches);
+    if (remoteMarker) parts.push(`{red-fg}${this.escapeTags(remoteMarker)}{/red-fg}`);
+    return parts.join(' ');
+  },
+
+  remoteBranchMarker(remoteBranches) {
+    const branchNames = remoteBranches.filter(name => name.includes('/'));
+    if (!branchNames.length) return '';
+    const label = `☁ ${branchNames.join(', ')}`;
+    return label.length > 30 ? `${label.slice(0, 29)}…` : label;
+  },
+
+  latestBranchMarker(isLatestCommit) {
+    if (!isLatestCommit) return '';
+    const branch = this.state.branch;
+    if (!branch || branch === '(分离 HEAD)') return '';
+    const label = `@${branch}`;
+    return label.length > 22 ? `${label.slice(0, 21)}…` : label;
   },
 
   async showCommit(commit) {

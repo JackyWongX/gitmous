@@ -63,7 +63,11 @@ module.exports = {
   },
 
   toast(message, color = this.COLORS.accent) {
-    const notice = this.blessed.message({ parent: this.screen, top: 'center', left: 'center', width: '55%', height: 'shrink', border: 'line', tags: true, style: { fg: this.COLORS.text, bg: '#172133', border: { fg: color } } });
+    const width = Math.min(
+      Math.max(18, this.textWidth(message) + 8),
+      Math.max(18, (this.screen.width || 80) - 4)
+    );
+    const notice = this.blessed.message({ parent: this.screen, top: 'center', left: 'center', width, height: 'shrink', border: 'line', tags: true, style: { fg: this.COLORS.text, bg: '#172133', border: { fg: color } } });
     notice.display(` {bold}${this.escapeTags(message)}{/bold} `, 2, () => this.destroyElement(notice));
   },
 

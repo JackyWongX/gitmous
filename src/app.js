@@ -68,6 +68,10 @@ class GitUiApp {
       this.screen.render();
       return;
     }
+    if (!this.state.startDirectoryIsGit && this.state.roots.length === 1) {
+      await this.selectRepo(this.state.roots[0], { silentSuccess: true });
+      return;
+    }
     if (!this.state.startDirectoryIsGit) {
       this.state.repo = null;
       this.renderAll();

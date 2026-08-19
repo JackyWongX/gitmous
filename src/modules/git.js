@@ -98,7 +98,7 @@ module.exports = {
     this.state.remoteRefs = new Map();
     remoteRefsRaw.split(/\r?\n/).filter(Boolean).forEach(line => {
       const [hash, name] = line.split('\t');
-      if (!hash || !name || name.endsWith('/HEAD')) return;
+      if (!hash || !name || name.endsWith('/HEAD') || !name.includes('/')) return;
       const names = this.state.remoteRefs.get(hash) || [];
       names.push(name);
       this.state.remoteRefs.set(hash, names);
