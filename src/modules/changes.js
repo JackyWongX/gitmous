@@ -65,16 +65,16 @@ module.exports = {
     if (staged) {
       const unstageAll = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
       actionButtons.push(unstageAll);
-      this.bindTooltip(unstageAll, '取消所有暂存：把“暂存的更改”全部移回“更改”区域');
-      unstageAll.on('press', () => this.perform('取消所有暂存', () => this.git(['reset', 'HEAD']).catch(() => this.git(['rm', '--cached', '-r', '--ignore-unmatch', '--', '.']))));
+      this.bindTooltip(unstageAll, () => this.t('unstageAllTooltip'));
+      unstageAll.on('press', () => this.perform(this.t('unstageAll'), () => this.git(['reset', 'HEAD']).catch(() => this.git(['rm', '--cached', '-r', '--ignore-unmatch', '--', '.']))));
     } else {
       const discardAll = this.button({ parent: this.changeContent, top, right: 3, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
       const stageAll = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '+', style: this.iconStyle });
       actionButtons.push(discardAll, stageAll);
-      this.bindTooltip(discardAll, '撤销所有更改：丢弃“更改”区域中的全部本地修改');
-      this.bindTooltip(stageAll, '暂存所有更改：把“更改”区域中的全部文件加入暂存区');
+      this.bindTooltip(discardAll, () => this.t('discardAllTooltip'));
+      this.bindTooltip(stageAll, () => this.t('stageAllTooltip'));
       discardAll.on('press', () => this.discardAllChanges());
-      stageAll.on('press', () => this.perform('暂存所有更改', () => this.git(['add', '-A'])));
+      stageAll.on('press', () => this.perform(this.t('stageAllChanges'), () => this.git(['add', '-A'])));
     }
     if (folded) {
       this.bindGroupActionHover(actionButtons, rowStates);
@@ -87,19 +87,19 @@ module.exports = {
       const rowElements = [rowBg];
       const main = this.button({ parent: this.changeContent, top: row, left: 2, right: staged ? 3 : 6, height: 1, shrink: false, padding: { left: 0, right: 0 }, tags: true, content: `{${marker.tag}}${marker.label}{/${marker.tag}}  ${this.escapeTags(item.file)}` });
       rowElements.push(main);
-      this.bindTooltip(main, `查看差异：${item.file}`);
+      this.bindTooltip(main, () => this.t('viewFileDiffTooltip', { file: item.file }));
       main.on('press', () => this.showFileDiff(item, staged));
       if (staged) {
         const unstageButton = this.button({ parent: this.changeContent, top: row, right: 0, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
         rowElements.push(unstageButton);
-        this.bindTooltip(unstageButton, `取消暂存：${item.file}`);
+        this.bindTooltip(unstageButton, () => this.t('unstageFileTooltip', { file: item.file }));
         unstageButton.on('press', () => this.unstage(item.file));
       } else {
         const undoButton = this.button({ parent: this.changeContent, top: row, right: 3, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
         const stageButton = this.button({ parent: this.changeContent, top: row, right: 0, width: 3, height: 1, shrink: false, content: '+', style: this.iconStyle });
         rowElements.push(undoButton, stageButton);
-        this.bindTooltip(undoButton, `撤销更改：${item.file}`);
-        this.bindTooltip(stageButton, `暂存：${item.file}`);
+        this.bindTooltip(undoButton, () => this.t('discardFileTooltip', { file: item.file }));
+        this.bindTooltip(stageButton, () => this.t('stageFileTooltip', { file: item.file }));
         undoButton.on('press', () => this.discard(item.file, item.code === '??'));
         stageButton.on('press', () => this.stage(item.file));
       }
@@ -115,26 +115,26 @@ module.exports = {
   renderChanges() {
     this.clearChildren(this.changeContent);
     let top = 0;
-    top = this.addFileGroup('暂存的更改', this.state.status.staged, 'staged', top);
-    top = this.addFileGroup('更改', [...this.state.status.unstaged, ...this.state.status.untracked], 'unstaged', top);
-    if (top === 0) this.blessed.box({ parent: this.changeContent, top: 1, left: 1, content: '{green-fg}工作区干净{/green-fg}', tags: true });
+    top = this.addFileGroup(this.t('stagedChanges'), this.state.status.staged, 'staged', top);
+    top = this.addFileGroup(this.t('unstagedChanges'), [...this.state.status.unstaged, ...this.state.status.untracked], 'unstaged', top);
+    if (top === 0) this.blessed.box({ parent: this.changeContent, top: 1, left: 1, content: `{green-fg}${this.t('workingTreeClean')}{/green-fg}`, tags: true });
     this.changeContent.height = Math.max(1, top + 1);
     this.resetScrollable(this.changeArea);
   },
 
   async stage(file) {
-    await this.perform(`暂存 ${file}`, () => this.git(['add', '--', file]));
+    await this.perform(this.t('stageFile', { file }), () => this.git(['add', '--', file]));
   },
 
   async unstage(file) {
-    await this.perform(`取消暂存 ${file}`, () => this.git(['reset', 'HEAD', '--', file]).catch(() => this.git(['rm', '--cached', '--', file])));
+    await this.perform(this.t('unstageFile', { file }), () => this.git(['reset', 'HEAD', '--', file]).catch(() => this.git(['rm', '--cached', '--', file])));
   },
 
   async discard(file, untracked) {
     this.confirm(
-      '确认撤销文件更改',
-      `这是危险操作，会丢弃该文件的本地修改，操作后无法从 GitUI 恢复。\n\n文件：${file}\n\n确定继续吗？`,
-      () => this.perform(`丢弃 ${file}`, () => untracked ? this.git(['clean', '-f', '--', file]) : this.git(['restore', '--source=HEAD', '--worktree', '--', file]))
+      this.t('confirmDiscardFile'),
+      this.t('discardFileConfirm', { file }),
+      () => this.perform(this.t('discardFile', { file }), () => untracked ? this.git(['clean', '-f', '--', file]) : this.git(['restore', '--source=HEAD', '--worktree', '--', file]))
     );
   },
 
@@ -142,7 +142,7 @@ module.exports = {
     this.state.selected = item.file;
     const baseArgs = staged ? ['diff', '--cached'] : ['diff'];
     await this.showDetailDiff({
-      label: ` 差异：${item.file} `,
+      label: () => this.t('diffLabel', { file: item.file }),
       collapsedArgs: [...baseArgs, '--', item.file],
       expandedArgs: [...baseArgs, '--unified=999999', '--', item.file]
     });
@@ -150,7 +150,7 @@ module.exports = {
 
   discardAllChanges() {
     const count = this.state.status.unstaged.length + this.state.status.untracked.length;
-    this.confirm('确认撤销多个文件更改', `这是危险操作，会丢弃“更改”区域中的 ${count} 个文件修改。\n\n已跟踪文件会还原到 HEAD，未跟踪文件会被永久删除，操作后无法从 GitUI 恢复。\n\n确定继续吗？`, () => this.perform('丢弃全部更改', async () => {
+    this.confirm(this.t('confirmDiscardMultiple'), this.t('discardMultipleConfirm', { count }), () => this.perform(this.t('discardAllChanges'), async () => {
       await this.git(['restore', '--source=HEAD', '--worktree', '.']);
       await this.git(['clean', '-fd']);
     }));
@@ -161,7 +161,7 @@ module.exports = {
     this.renderRepositories();
     this.renderChanges();
     this.renderHistory();
-    if (!this.state.selected) this.setDetailText(null, ' 点击更改文件可查看工作区差异；点击提交可展开文件列表，再点击文件查看该提交的修改对比。');
+    if (!this.state.selected) this.setDetailText(null, this.t('helpDetail'));
     this.screen.render();
   }
 };

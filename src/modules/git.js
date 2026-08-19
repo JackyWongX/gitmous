@@ -2,7 +2,7 @@
 
 module.exports = {
   git(args, options = {}) {
-    if (!this.state.repo && !options.cwd) return Promise.reject(new Error('请先选择一个 Git 仓库。'));
+    if (!this.state.repo && !options.cwd) return Promise.reject(new Error(this.t('noRepoSelected')));
     const cwd = options.cwd || this.state.repo;
     return new Promise((resolve, reject) => {
       this.execFile('git', ['-C', cwd, ...args], { windowsHide: true, maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' }, (error, stdout, stderr) => {
@@ -85,9 +85,9 @@ module.exports = {
       this.git(['log', '-n', '180', '--date=short', '--pretty=format:%H%x09%h%x09%ad%x09%an%x09%s']).catch(() => '')
     ]);
     this.state.status = this.parseStatus(statusRaw);
-    this.state.branch = branch.trim() || '(分离 HEAD)';
+    this.state.branch = branch.trim() || this.t('detachedHead');
     this.state.remotes = remote.split(/\r?\n/).filter(Boolean);
-    this.state.remote = this.state.remotes[0] || '无远程仓库';
+    this.state.remote = this.state.remotes[0] || this.t('noRemote');
     this.state.upstream = (await this.git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => '')).trim();
     this.state.ahead = 0;
     this.state.behind = 0;

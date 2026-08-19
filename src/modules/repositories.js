@@ -13,10 +13,10 @@ module.exports = {
         height: 1,
         shrink: false,
         tags: true,
-        content: '{green-fg}+{/green-fg} 初始化仓库',
+        content: `{green-fg}+{/green-fg} ${this.t('initRepository')}`,
         style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
       });
-      initButton.on('press', () => this.runUiAction(() => this.initializeCurrentDirectory(), '初始化仓库'));
+      initButton.on('press', () => this.runUiAction(() => this.initializeCurrentDirectory(), this.t('initRepository')));
       row += 1;
       const cloneButton = this.button({
         parent: this.repoContent,
@@ -26,7 +26,7 @@ module.exports = {
         height: 1,
         shrink: false,
         tags: true,
-        content: '{cyan-fg}↓{/cyan-fg} 从远程分支克隆',
+        content: `{cyan-fg}↓{/cyan-fg} ${this.t('cloneFromRemote')}`,
         style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
       });
       cloneButton.on('press', () => this.cloneRemoteRepository());
@@ -37,11 +37,12 @@ module.exports = {
       const rowStyle = { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } };
       const branch = active ? ` ${this.escapeTags(this.state.branch)}` : '';
       const indicator = active ? '{green-fg}●{/green-fg}' : ' ';
+      const branchButtonWidth = Math.max(10, this.textWidth(this.t('branchManagement')) + 2);
       const rowButton = this.button({
         parent: this.repoContent,
         top: row + index,
         left: 0,
-        right: active ? 16 : 0,
+        right: active ? branchButtonWidth + 6 : 0,
         height: 1,
         shrink: false,
         padding: { left: 0, right: 0 },
@@ -57,10 +58,10 @@ module.exports = {
           parent: this.repoContent,
           top: row + index,
           right: 5,
-          width: 10,
+          width: branchButtonWidth,
           height: 1,
           shrink: false,
-          content: '分支管理',
+          content: this.t('branchManagement'),
           style: rowStyle
         });
         const moreButton = this.button({
@@ -86,7 +87,7 @@ module.exports = {
     this.state.selected = null;
     this.state.expandedHistory.clear();
     this.state.historyFiles.clear();
-    await this.perform('加载仓库', () => this.refreshRepo(), false, options);
+    await this.perform(this.t('loadRepository'), () => this.refreshRepo(), false, options);
   },
 
   async refreshRepositoryList() {
@@ -95,7 +96,7 @@ module.exports = {
   },
 
   async initializeCurrentDirectory() {
-    const root = await this.perform('初始化仓库', async () => {
+    const root = await this.perform(this.t('initRepository'), async () => {
       await this.git(['init'], { cwd: this.state.startDirectory });
       return this.findGitRoot(this.state.startDirectory);
     }, false);
@@ -106,9 +107,9 @@ module.exports = {
   },
 
   cloneRemoteRepository() {
-    this.textDialog('克隆远程仓库', '输入远程仓库地址，例如 https://example.com/repo.git', async url => {
+    this.textDialog(this.t('cloneRemoteRepository'), this.t('remoteUrlPlaceholder'), async url => {
       const before = new Set(this.state.roots);
-      const newRoot = await this.perform('克隆仓库', async () => {
+      const newRoot = await this.perform(this.t('cloneRepository'), async () => {
         await this.git(['clone', url], { cwd: this.state.startDirectory });
         await this.refreshRepositoryList();
         return this.state.roots.find(root => !before.has(root)) || this.state.roots[0] || null;

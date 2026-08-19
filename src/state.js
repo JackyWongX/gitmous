@@ -20,6 +20,7 @@ function createState() {
     historyFiles: new Map(),
     selected: null,
     busy: false,
+    language: 'en',
     collapsed: {
       repositories: false,
       commit: false,

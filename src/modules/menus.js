@@ -2,48 +2,48 @@
 
 module.exports = {
   currentLocalBranch() {
-    if (!this.state.branch || this.state.branch === '(分离 HEAD)') return '';
+    if (!this.state.branch || this.isDetachedBranchName(this.state.branch)) return '';
     return this.state.branch;
   },
 
   async publishCurrentBranch(anchor = this.commitButton) {
     const branch = this.currentLocalBranch();
     if (!branch) {
-      this.toast('当前不是本地分支，无法发布分支', this.COLORS.yellow);
+      this.toast(this.t('noLocalBranchPublish'), this.COLORS.yellow);
       return;
     }
     const remotes = this.state.remotes.length ? this.state.remotes : (await this.git(['remote']).catch(() => '')).split(/\r?\n/).filter(Boolean);
     if (!remotes.length) {
-      this.inputDialog('发布分支', '输入或粘贴远程仓库地址，例如 https://example.com/repo.git', url => this.perform('发布分支', async () => {
+      this.inputDialog(this.t('publishBranch'), this.t('remoteUrlPlaceholder'), url => this.perform(this.t('publishBranch'), async () => {
         await this.git(['remote', 'add', 'origin', url]);
         await this.git(['push', '-u', 'origin', branch]);
       }));
       return;
     }
     if (remotes.length === 1) {
-      await this.perform('发布分支', () => this.git(['push', '-u', remotes[0], branch]));
+      await this.perform(this.t('publishBranch'), () => this.git(['push', '-u', remotes[0], branch]));
       return;
     }
-    this.showMenu('选择远程仓库', remotes.map(remote => ({
-      label: `发布到 ${this.escapeTags(remote)}/${this.escapeTags(branch)}`,
-      action: () => this.perform('发布分支', () => this.git(['push', '-u', remote, branch]))
+    this.showMenu(this.t('selectRemote'), remotes.map(remote => ({
+      label: this.t('publishTo', { remote: this.escapeTags(remote), branch: this.escapeTags(branch) }),
+      action: () => this.perform(this.t('publishBranch'), () => this.git(['push', '-u', remote, branch]))
     })), anchor);
   },
 
   async pushCurrentBranch() {
-    await this.perform('推送', () => this.git(['push']));
+    await this.perform(this.t('pushAction'), () => this.git(['push']));
   },
 
   async pullCurrentBranch() {
-    await this.perform('拉取', () => this.git(['pull', '--no-rebase']));
+    await this.perform(this.t('pullAction'), () => this.git(['pull', '--no-rebase']));
   },
 
   networkMenu(anchor) {
-    this.showMenu('网络操作', [
-      { label: '拉取  git pull --no-rebase', action: () => this.perform('拉取', () => this.git(['pull', '--no-rebase'])) },
-      { label: '推送  git push', action: () => this.perform('推送', () => this.git(['push'])) },
-      { label: '抓取  git fetch --prune', action: () => this.perform('抓取', () => this.git(['fetch', '--prune'])) },
-      { label: '发布当前分支到 origin', action: () => this.perform('发布分支', () => this.git(['push', '-u', 'origin', this.state.branch])) }
+    this.showMenu(this.t('networkActions'), [
+      { label: this.t('pullMenu'), action: () => this.perform(this.t('pullAction'), () => this.git(['pull', '--no-rebase'])) },
+      { label: this.t('pushMenu'), action: () => this.perform(this.t('pushAction'), () => this.git(['push'])) },
+      { label: this.t('fetchMenu'), action: () => this.perform(this.t('fetchAction'), () => this.git(['fetch', '--prune'])) },
+      { label: this.t('publishCurrentToOrigin'), action: () => this.perform(this.t('publishBranch'), () => this.git(['push', '-u', 'origin', this.state.branch])) }
     ], anchor);
   },
 
@@ -62,31 +62,31 @@ module.exports = {
   async switchRemoteBranch(remoteBranch, localBranches) {
     const localName = remoteBranch.replace(/^[^/]+\//, '');
     if (!localName || localName === remoteBranch) {
-      await this.perform(`切换到 ${remoteBranch}`, () => this.git(['switch', '--detach', remoteBranch]));
+      await this.perform(this.t('switchTo', { name: remoteBranch }), () => this.git(['switch', '--detach', remoteBranch]));
       return;
     }
     if (localBranches.includes(localName)) {
-      await this.perform(`切换到 ${localName}`, () => this.git(['switch', localName]));
+      await this.perform(this.t('switchTo', { name: localName }), () => this.git(['switch', localName]));
       return;
     }
-    await this.perform(`切换到 ${localName}`, () => this.git(['switch', '--track', '-c', localName, remoteBranch]));
+    await this.perform(this.t('switchTo', { name: localName }), () => this.git(['switch', '--track', '-c', localName, remoteBranch]));
   },
 
   createLocalBranch() {
-    this.textDialog('创建本地分支', '输入新本地分支名', name => this.perform(`创建本地分支 ${name}`, () => this.git(['switch', '-c', name])));
+    this.textDialog(this.t('createLocalBranch'), this.t('newLocalBranchPlaceholder'), name => this.perform(this.t('createLocalBranch') + ` ${name}`, () => this.git(['switch', '-c', name])));
   },
 
   async createRemoteBranch(anchor, localBranches) {
-    this.textDialog('创建远程分支', '输入新远程分支名', async name => {
+    this.textDialog(this.t('createRemoteBranch'), this.t('newRemoteBranchPlaceholder'), async name => {
       const remotes = this.state.remotes.length ? this.state.remotes : (await this.git(['remote']).catch(() => '')).split(/\r?\n/).filter(Boolean);
-      const publish = remote => this.perform(`创建远程分支 ${remote}/${name}`, async () => {
+      const publish = remote => this.perform(this.t('createRemoteBranchAt', { name: `${remote}/${name}` }), async () => {
         if (!localBranches.includes(name)) await this.git(['switch', '-c', name]);
         else if (this.state.branch !== name) await this.git(['switch', name]);
         await this.git(['push', '-u', remote, name]);
       });
       if (!remotes.length) {
-        this.inputDialog('远程仓库地址', '输入或粘贴远程仓库地址，例如 https://example.com/repo.git', async url => {
-          await this.perform('添加远程仓库', () => this.git(['remote', 'add', 'origin', url]), true, { silentSuccess: true });
+        this.inputDialog(this.t('remoteAddress'), this.t('remoteUrlPlaceholder'), async url => {
+          await this.perform(this.t('addRemoteRepository'), () => this.git(['remote', 'add', 'origin', url]), true, { silentSuccess: true });
           await publish('origin');
         });
         return;
@@ -95,8 +95,8 @@ module.exports = {
         await publish(remotes[0]);
         return;
       }
-      this.showMenu('选择远程仓库', remotes.map(remote => ({
-        label: `创建 ${this.escapeTags(remote)}/${this.escapeTags(name)}`,
+      this.showMenu(this.t('selectRemote'), remotes.map(remote => ({
+        label: this.t('createRemoteAt', { remote: this.escapeTags(remote), name: this.escapeTags(name) }),
         action: () => publish(remote)
       })), anchor);
     });
@@ -105,97 +105,97 @@ module.exports = {
   async branchSwitchMenu(anchor) {
     const [branches, remotes] = await Promise.all([this.localBranches(), this.remoteBranches()]);
     const entries = [
-      { type: 'header', label: '本地分支' },
+      { type: 'header', label: this.t('localBranches') },
       ...(branches.length
         ? branches.map(name => ({
           label: `${name === this.state.branch ? '{green-fg}●{/green-fg}' : ' '} ${this.escapeTags(name)}`,
-          action: () => name === this.state.branch ? this.toast('已在当前分支') : this.perform(`切换到 ${name}`, () => this.git(['switch', name]))
+          action: () => name === this.state.branch ? this.toast(this.t('alreadyCurrentBranch')) : this.perform(this.t('switchTo', { name }), () => this.git(['switch', name]))
         }))
-        : [{ label: '{gray-fg}没有本地分支{/gray-fg}', action: () => {} }]),
-      { label: '{green-fg}+{/green-fg} 创建本地分支', action: () => this.createLocalBranch() },
+        : [{ label: `{gray-fg}${this.t('noLocalBranches')}{/gray-fg}`, action: () => {} }]),
+      { label: `{green-fg}+{/green-fg} ${this.t('createLocalBranch')}`, action: () => this.createLocalBranch() },
       { type: 'separator', label: '' },
-      { type: 'header', label: '远程分支' },
+      { type: 'header', label: this.t('remoteBranches') },
       ...(remotes.length
         ? remotes.map(name => ({
           label: `  {red-fg}☁ {/red-fg} ${this.escapeTags(name)}`,
           action: () => this.switchRemoteBranch(name, branches)
         }))
-        : [{ label: '{gray-fg}没有远程分支{/gray-fg}', action: () => {} }]),
-      { label: '{green-fg}+{/green-fg} 创建远程分支', action: menuAnchor => this.createRemoteBranch(menuAnchor, branches) }
+        : [{ label: `{gray-fg}${this.t('noRemoteBranches')}{/gray-fg}`, action: () => {} }]),
+      { label: `{green-fg}+{/green-fg} ${this.t('createRemoteBranch')}`, action: menuAnchor => this.createRemoteBranch(menuAnchor, branches) }
     ];
-    this.showMenu('分支管理', entries, anchor);
+    this.showMenu(this.t('branchManagement'), entries, anchor);
   },
 
   async branchMenu(anchor) {
     const branches = await this.localBranches();
-    this.showMenu('分支管理', [
-      { label: '新建分支', action: () => this.textDialog('新建分支', '输入新分支名', name => this.perform('创建分支', () => this.git(['switch', '-c', name]))) },
-      { label: '合并分支', action: menuAnchor => this.mergeMenu(branches, menuAnchor) },
-      { label: '删除分支', action: menuAnchor => this.deleteBranchMenu(branches, menuAnchor) },
-      ...branches.map(name => ({ label: `${name === this.state.branch ? '{green-fg}●{/green-fg} ' : '○ '}切换到 ${this.escapeTags(name)}`, action: () => name === this.state.branch ? this.toast('已在当前分支') : this.perform(`切换到 ${name}`, () => this.git(['switch', name])) }))
+    this.showMenu(this.t('branchManagement'), [
+      { label: this.t('newBranch'), action: () => this.textDialog(this.t('newBranch'), this.t('newBranchPlaceholder'), name => this.perform(this.t('createBranch'), () => this.git(['switch', '-c', name]))) },
+      { label: this.t('mergeBranch'), action: menuAnchor => this.mergeMenu(branches, menuAnchor) },
+      { label: this.t('deleteBranch'), action: menuAnchor => this.deleteBranchMenu(branches, menuAnchor) },
+      ...branches.map(name => ({ label: `${name === this.state.branch ? '{green-fg}●{/green-fg} ' : '○ '}${this.t('switchToBranch', { name: this.escapeTags(name) })}`, action: () => name === this.state.branch ? this.toast(this.t('alreadyCurrentBranch')) : this.perform(this.t('switchTo', { name }), () => this.git(['switch', name])) }))
     ], anchor);
   },
 
   mergeMenu(branches, anchor) {
-    const options = branches.filter(name => name !== this.state.branch).map(name => ({ label: `合并 ${this.escapeTags(name)} 到 ${this.escapeTags(this.state.branch)}`, action: () => this.confirm('合并分支', `将 ${name} 合并到 ${this.state.branch}，确定继续吗？`, () => this.perform('合并分支', () => this.git(['merge', '--no-edit', name]))) }));
-    this.showMenu('选择要合并的分支', options.length ? options : [{ label: '没有可合并的其他本地分支', action: () => {} }], anchor);
+    const options = branches.filter(name => name !== this.state.branch).map(name => ({ label: this.t('mergeInto', { name: this.escapeTags(name), branch: this.escapeTags(this.state.branch) }), action: () => this.confirm(this.t('mergeBranch'), this.t('mergeConfirm', { name, branch: this.state.branch }), () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-edit', name]))) }));
+    this.showMenu(this.t('selectBranchToMerge'), options.length ? options : [{ label: this.t('noBranchToMerge'), action: () => {} }], anchor);
   },
 
   deleteBranchMenu(branches, anchor) {
-    const options = branches.filter(name => name !== this.state.branch).map(name => ({ label: `{red-fg}删除{/red-fg} ${this.escapeTags(name)}`, action: () => this.confirm('删除分支', `删除本地分支 ${name} 吗？未合并的提交会阻止删除。`, () => this.perform('删除分支', () => this.git(['branch', '-d', name]))) }));
-    this.showMenu('选择要删除的分支', options.length ? options : [{ label: '当前没有可删除的其他本地分支', action: () => {} }], anchor);
+    const options = branches.filter(name => name !== this.state.branch).map(name => ({ label: `{red-fg}${this.t('delete')}{/red-fg} ${this.escapeTags(name)}`, action: () => this.confirm(this.t('deleteBranch'), this.t('deleteLocalBranchConfirm', { name }), () => this.perform(this.t('deleteBranch'), () => this.git(['branch', '-d', name]))) }));
+    this.showMenu(this.t('selectBranchToDelete'), options.length ? options : [{ label: this.t('noBranchToDelete'), action: () => {} }], anchor);
   },
 
   async stashMenu(anchor) {
     const stashes = (await this.git(['stash', 'list']).catch(() => '')).split(/\r?\n/).filter(Boolean);
-    this.showMenu('储藏', [
-      { label: '储藏当前更改', action: () => this.textDialog('储藏当前更改', '输入储藏说明', message => this.perform('储藏', () => this.git(['stash', 'push', '-m', message]))) },
-      { label: '应用最新储藏', action: () => this.perform('应用储藏', () => this.git(['stash', 'pop'])) },
+    this.showMenu(this.t('stash'), [
+      { label: this.t('stashCurrentChanges'), action: () => this.textDialog(this.t('stashCurrentChanges'), this.t('stashMessagePlaceholder'), message => this.perform(this.t('stash'), () => this.git(['stash', 'push', '-m', message]))) },
+      { label: this.t('applyLatestStash'), action: () => this.perform(this.t('applyLatestStash'), () => this.git(['stash', 'pop'])) },
       ...stashes.map((stash, index) => ({ label: `{yellow-fg}${this.escapeTags(stash)}{/yellow-fg}`, action: menuAnchor => this.stashDetailMenu(index, stash, menuAnchor) }))
     ], anchor);
   },
 
   stashDetailMenu(index, stash, anchor) {
-    this.showMenu(`储藏 ${index}`, [
-      { label: '查看差异', action: async () => { const diff = await this.git(['stash', 'show', '-p', `stash@{${index}}`]); this.setDetailText(` 储藏：${index} `, this.formatDiff(diff)); this.screen.render(); } },
-      { label: '应用但保留', action: () => this.perform('应用储藏', () => this.git(['stash', 'apply', `stash@{${index}}`])) },
-      { label: '弹出并删除', action: () => this.perform('弹出储藏', () => this.git(['stash', 'pop', `stash@{${index}}`])) },
-      { label: '{red-fg}删除储藏{/red-fg}', action: () => this.confirm('删除储藏', `删除 ${stash} 吗？`, () => this.perform('删除储藏', () => this.git(['stash', 'drop', `stash@{${index}}`]))) }
+    this.showMenu(`${this.t('stash')} ${index}`, [
+      { label: this.t('viewDiff'), action: async () => { const diff = await this.git(['stash', 'show', '-p', `stash@{${index}}`]); this.setDetailText(` ${this.t('stash')}: ${index} `, this.formatDiff(diff)); this.screen.render(); } },
+      { label: this.t('applyKeep'), action: () => this.perform(this.t('applyKeep'), () => this.git(['stash', 'apply', `stash@{${index}}`])) },
+      { label: this.t('popAndDelete'), action: () => this.perform(this.t('popAndDelete'), () => this.git(['stash', 'pop', `stash@{${index}}`])) },
+      { label: `{red-fg}${this.t('deleteStash')}{/red-fg}`, action: () => this.confirm(this.t('deleteStash'), this.t('deleteStashConfirm', { stash }), () => this.perform(this.t('deleteStash'), () => this.git(['stash', 'drop', `stash@{${index}}`]))) }
     ], anchor);
   },
 
   async tagMenu(anchor) {
     const tags = (await this.git(['tag', '--list']).catch(() => '')).split(/\r?\n/).filter(Boolean);
-    this.showMenu('标签', [
-      { label: '新建轻量标签（当前 HEAD）', action: () => this.textDialog('新建标签', '输入标签名，例如 v1.0.0', name => this.perform('创建标签', () => this.git(['tag', name]))) },
-      ...tags.map(name => ({ label: `{red-fg}删除{/red-fg} ${this.escapeTags(name)}`, action: () => this.confirm('删除标签', `删除本地标签 ${name} 吗？`, () => this.perform('删除标签', () => this.git(['tag', '-d', name]))) }))
+    this.showMenu(this.t('tags'), [
+      { label: this.t('newLightweightTag'), action: () => this.textDialog(this.t('newTag'), this.t('tagPlaceholder'), name => this.perform(this.t('createTag'), () => this.git(['tag', name]))) },
+      ...tags.map(name => ({ label: `{red-fg}${this.t('delete')}{/red-fg} ${this.escapeTags(name)}`, action: () => this.confirm(this.t('deleteTag'), this.t('deleteLocalTagConfirm', { name }), () => this.perform(this.t('deleteTag'), () => this.git(['tag', '-d', name]))) }))
     ], anchor);
   },
 
   async remoteMenu(anchor) {
     const names = (await this.git(['remote']).catch(() => '')).split(/\r?\n/).filter(Boolean);
-    this.showMenu('远程仓库', [
-      { label: '添加远程仓库', action: () => this.textDialog('远程名称', '例如 origin', name => this.textDialog('远程地址', '例如 https://example.com/repo.git', url => this.perform('添加远程', () => this.git(['remote', 'add', name, url])))) },
-      ...names.map(name => ({ label: `查看 ${this.escapeTags(name)}`, action: async () => { const url = await this.git(['remote', 'get-url', name]); this.setDetailText(' 远程仓库 ', `${name}\n${url}`); this.screen.render(); } })),
-      ...names.map(name => ({ label: `{red-fg}删除远程{/red-fg} ${this.escapeTags(name)}`, action: () => this.confirm('删除远程', `删除远程 ${name} 吗？`, () => this.perform('删除远程', () => this.git(['remote', 'remove', name]))) }))
+    this.showMenu(this.t('remotes'), [
+      { label: this.t('addRemoteRepository'), action: () => this.textDialog(this.t('remoteName'), this.t('remoteNamePlaceholder'), name => this.textDialog(this.t('remoteUrl'), this.t('remoteUrlExample'), url => this.perform(this.t('addRemote'), () => this.git(['remote', 'add', name, url])))) },
+      ...names.map(name => ({ label: this.t('viewRemote', { name: this.escapeTags(name) }), action: async () => { const url = await this.git(['remote', 'get-url', name]); this.setDetailText(this.t('remoteRepository'), `${name}\n${url}`); this.screen.render(); } })),
+      ...names.map(name => ({ label: `{red-fg}${this.t('deleteRemote')}{/red-fg} ${this.escapeTags(name)}`, action: () => this.confirm(this.t('deleteRemote'), this.t('deleteRemoteConfirm', { name }), () => this.perform(this.t('deleteRemote'), () => this.git(['remote', 'remove', name]))) }))
     ], anchor);
   },
 
   actionMenu(anchor) {
-    this.showMenu('Git 操作', [
-      { label: '{cyan-fg}网络：拉取、推送、抓取{/cyan-fg}', action: menuAnchor => this.networkMenu(menuAnchor) },
-      { label: '{green-fg}分支：新建、切换、合并、删除{/green-fg}', action: menuAnchor => this.branchMenu(menuAnchor) },
-      { label: '{yellow-fg}储藏：保存、应用、删除{/yellow-fg}', action: menuAnchor => this.stashMenu(menuAnchor) },
-      { label: '{purple-fg}标签：创建、删除{/purple-fg}', action: menuAnchor => this.tagMenu(menuAnchor) },
-      { label: '远程仓库：添加、查看、删除', action: menuAnchor => this.remoteMenu(menuAnchor) },
-      { label: '{red-fg}撤销最近一次提交（保留暂存区）{/red-fg}', action: () => this.confirm('撤销提交', '将使用 git reset --soft HEAD~1，提交会被撤销但内容保留在暂存区。', () => this.perform('撤销提交', () => this.git(['reset', '--soft', 'HEAD~1']))) }
+    this.showMenu(this.t('gitActions'), [
+      { label: `{cyan-fg}${this.t('networkCategory')}{/cyan-fg}`, action: menuAnchor => this.networkMenu(menuAnchor) },
+      { label: `{green-fg}${this.t('branchCategory')}{/green-fg}`, action: menuAnchor => this.branchMenu(menuAnchor) },
+      { label: `{yellow-fg}${this.t('stashCategory')}{/yellow-fg}`, action: menuAnchor => this.stashMenu(menuAnchor) },
+      { label: `{purple-fg}${this.t('tagCategory')}{/purple-fg}`, action: menuAnchor => this.tagMenu(menuAnchor) },
+      { label: this.t('remoteCategory'), action: menuAnchor => this.remoteMenu(menuAnchor) },
+      { label: `{red-fg}${this.t('undoLastCommit')}{/red-fg}`, action: () => this.confirm(this.t('undoCommit'), this.t('undoCommitConfirm'), () => this.perform(this.t('undoCommit'), () => this.git(['reset', '--soft', 'HEAD~1']))) }
     ], anchor);
   },
 
   repositoryMenu(anchor) {
-    this.showMenu('存储库', [
-      { label: '刷新当前存储库', action: () => this.perform('刷新', () => this.refreshRepo(), false) },
-      { label: '查看当前存储库路径', action: () => { this.setDetailText(' 存储库路径 ', this.escapeTags(this.state.repo || '未选择')); this.screen.render(); } }
+    this.showMenu(this.t('repository'), [
+      { label: this.t('refreshCurrentRepository'), action: () => this.perform(this.t('refresh'), () => this.refreshRepo(), false) },
+      { label: this.t('viewCurrentRepositoryPath'), action: () => { this.setDetailText(this.t('repositoryPath'), this.escapeTags(this.state.repo || this.t('notSelected'))); this.screen.render(); } }
     ], anchor);
   }
 };

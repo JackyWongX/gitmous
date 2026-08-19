@@ -47,12 +47,12 @@ module.exports = {
 
       const files = this.state.historyFiles.get(commit.hash);
       if (files == null) {
-        this.blessed.box({ parent: this.historyContent, top: row, left: 2, right: 0, height: 1, tags: true, content: '{gray-fg}加载文件列表...{/gray-fg}', style: { fg: this.COLORS.dim, bg: this.COLORS.panel } });
+        this.blessed.box({ parent: this.historyContent, top: row, left: 2, right: 0, height: 1, tags: true, content: `{gray-fg}${this.t('loadingFiles')}{/gray-fg}`, style: { fg: this.COLORS.dim, bg: this.COLORS.panel } });
         row += 1;
         return;
       }
       if (!files.length) {
-        this.blessed.box({ parent: this.historyContent, top: row, left: 2, right: 0, height: 1, tags: true, content: '{gray-fg}没有文件变更{/gray-fg}', style: { fg: this.COLORS.dim, bg: this.COLORS.panel } });
+        this.blessed.box({ parent: this.historyContent, top: row, left: 2, right: 0, height: 1, tags: true, content: `{gray-fg}${this.t('noFileChanges')}{/gray-fg}`, style: { fg: this.COLORS.dim, bg: this.COLORS.panel } });
         row += 1;
         return;
       }
@@ -71,7 +71,7 @@ module.exports = {
           content: `{${marker.tag}}${marker.label}{/${marker.tag}}  ${this.escapeTags(fileItem.file)}${renameText}`,
           style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
         });
-        this.bindTooltip(fileButton, `查看该提交中的文件差异：${fileItem.file}`);
+        this.bindTooltip(fileButton, () => this.t('viewCommitFileDiffTooltip', { file: fileItem.file }));
         fileButton.on('press', () => this.showCommitFileDiff(commit, fileItem));
         row += 1;
       });
@@ -99,7 +99,7 @@ module.exports = {
       email: (parts[3] || '').trim(),
       date: (parts[4] || commit.date || '').trim(),
       refs: (parts[5] || '').trim(),
-      message: parts.slice(6).join('\x1f').trim() || commit.subject || '(无提交内容)'
+      message: parts.slice(6).join('\x1f').trim() || commit.subject || this.t('noCommitMessage')
     };
     this.commitTooltipCache.set(key, data);
     return data;
@@ -108,18 +108,18 @@ module.exports = {
   async commitTooltipText(commit, remoteBranches, isLatestCommit) {
     const data = await this.commitTooltipData(commit);
     const lines = [
-      `完整 hash：${data.fullHash || commit.fullHash || commit.hash}`,
-      `短 hash：${data.shortHash || commit.hash}`,
-      `作者：${data.email ? `${data.author} <${data.email}>` : (data.author || '未知')}`,
-      `日期：${data.date || '未知'}`
+      `${this.t('fullHash')}: ${data.fullHash || commit.fullHash || commit.hash}`,
+      `${this.t('shortHash')}: ${data.shortHash || commit.hash}`,
+      `${this.t('author')}: ${data.email ? `${data.author} <${data.email}>` : (data.author || this.t('unknown'))}`,
+      `${this.t('date')}: ${data.date || this.t('unknown')}`
     ];
-    if (isLatestCommit && this.state.branch && this.state.branch !== '(分离 HEAD)') lines.push(`当前分支：@${this.state.branch}`);
+    if (isLatestCommit && this.state.branch && !this.isDetachedBranchName(this.state.branch)) lines.push(`${this.t('currentBranch')}: @${this.state.branch}`);
     const remoteNames = remoteBranches.filter(name => name.includes('/'));
-    if (remoteNames.length) lines.push(`远程分支：${remoteNames.join(', ')}`);
-    if (data.refs) lines.push(`引用：${data.refs}`);
+    if (remoteNames.length) lines.push(`${this.t('remoteBranch')}: ${remoteNames.join(', ')}`);
+    if (data.refs) lines.push(`${this.t('refs')}: ${data.refs}`);
     lines.push('');
-    lines.push('提交内容：');
-    lines.push(...String(data.message || '(无提交内容)').split(/\r?\n/));
+    lines.push(this.t('commitMessage'));
+    lines.push(...String(data.message || this.t('noCommitMessage')).split(/\r?\n/));
     return lines.join('\n');
   },
 
@@ -142,14 +142,14 @@ module.exports = {
   latestBranchMarker(isLatestCommit) {
     if (!isLatestCommit) return '';
     const branch = this.state.branch;
-    if (!branch || branch === '(分离 HEAD)') return '';
+    if (!branch || this.isDetachedBranchName(branch)) return '';
     const label = `@${branch}`;
     return label.length > 22 ? `${label.slice(0, 21)}…` : label;
   },
 
   async showCommit(commit) {
-    const detail = await this.git(['show', '--stat', '--patch', '--decorate=short', commit.hash]).catch(error => `无法读取提交：${error.message}`);
-    this.setDetailText(` 提交：${commit.hash} `, this.formatDiff(detail));
+    const detail = await this.git(['show', '--stat', '--patch', '--decorate=short', commit.hash]).catch(error => this.t('cannotReadCommit', { message: error.message }));
+    this.setDetailText(this.t('commitLabel', { hash: commit.hash }), this.formatDiff(detail));
     this.screen.render();
   },
 
@@ -176,7 +176,7 @@ module.exports = {
     this.state.selected = `${commit.hash}:${fileItem.file}`;
     const paths = fileItem.oldFile ? [fileItem.oldFile, fileItem.file] : [fileItem.file];
     await this.showDetailDiff({
-      label: ` ${commit.hash}：${fileItem.file} `,
+      label: () => this.t('commitLabel', { hash: `${commit.hash}: ${fileItem.file}` }),
       collapsedArgs: ['show', '--format=', '--patch', '--find-renames', commit.hash, '--', ...paths],
       expandedArgs: ['show', '--format=', '--patch', '--find-renames', '--unified=999999', commit.hash, '--', ...paths]
     });
@@ -189,37 +189,37 @@ module.exports = {
 
   commitContextMenu(commit, anchor) {
     const shortHash = commit.hash || (commit.fullHash || '').slice(0, 8);
-    this.showMenu(`提交 ${shortHash}`, [
+    this.showMenu(this.t('commitMenuTitle', { hash: shortHash }), [
       {
-        label: '创建分支',
-        action: () => this.textDialog('从提交创建分支', '输入新分支名', async name => {
+        label: this.t('createBranch'),
+        action: () => this.textDialog(this.t('createBranchFromCommit'), this.t('newBranchPlaceholder'), async name => {
           const fullHash = await this.resolveCommitHash(commit);
-          await this.perform(`创建分支 ${name}`, () => this.git(['branch', name, fullHash]));
+          await this.perform(this.t('createBranch') + ` ${name}`, () => this.git(['branch', name, fullHash]));
         })
       },
       {
-        label: '复制hash',
-        action: () => this.perform('复制hash', async () => {
+        label: this.t('copyHash'),
+        action: () => this.perform(this.t('copyHash'), async () => {
           const fullHash = await this.resolveCommitHash(commit);
           await this.writeClipboard(fullHash);
         }, false)
       },
       {
-        label: '复制提交内容',
-        action: () => this.perform('复制提交内容', async () => {
+        label: this.t('copyCommitContent'),
+        action: () => this.perform(this.t('copyCommitContent'), async () => {
           const fullHash = await this.resolveCommitHash(commit);
           const content = await this.git(['show', '--stat', '--patch', '--decorate=full', '--find-renames', fullHash]);
           await this.writeClipboard(content);
         }, false)
       },
       {
-        label: '{red-fg}还原到当前{/red-fg}',
+        label: `{red-fg}${this.t('resetToHere')}{/red-fg}`,
         action: async () => {
           const fullHash = await this.resolveCommitHash(commit);
           this.confirm(
-            '还原到当前提交',
-            `这会执行 git reset --hard ${fullHash}\n\n当前分支会回退到该提交；该提交之后的提交会从当前分支历史中移除，已跟踪文件的未提交修改也会丢失。\n\n确定继续吗？`,
-            () => this.perform('还原到当前提交', () => this.git(['reset', '--hard', fullHash]))
+            this.t('resetToCommit'),
+            this.t('resetToCommitConfirm', { hash: fullHash }),
+            () => this.perform(this.t('resetToCommit'), () => this.git(['reset', '--hard', fullHash]))
           );
         }
       }

@@ -72,6 +72,10 @@ module.exports = {
     return this.normalizePath(left) === this.normalizePath(right);
   },
 
+  isDetachedBranchName(branch) {
+    return branch === this.t('detachedHead') || branch === '(detached HEAD)' || branch === '\u0028\u5206\u79bb HEAD\u0029';
+  },
+
   padRightDisplay(value, width) {
     const text = String(value || '');
     return text + ' '.repeat(Math.max(0, width - this.textWidth(text)));
@@ -93,12 +97,44 @@ module.exports = {
     return `┌${'─'.repeat(left)}${text}${'─'.repeat(right)}┐`;
   },
 
+  applyLanguage() {
+    this.state.language = this.language;
+    this.header.setContent(` {bold}GitUI Mouse{/bold}  {gray-fg}${this.t('appSubtitle')}{/gray-fg}`);
+    this.refreshButton.setContent(this.t('refresh'));
+    this.actionButton.setContent(this.t('actions'));
+    this.exitButton.setContent(this.t('exit'));
+    this.languageButton.setContent(this.t('settings'));
+    this.detailPanel.setLabel(this.t('detailPanel'));
+    this.commitPlaceholder.setContent(this.t('commitPlaceholder'));
+    this.updateDetailToggleButton();
+    this.reflowLeftPanel();
+    this.renderAll();
+    if (this.detailDiffView) this.showDetailDiff(this.detailDiffView).catch(error => this.toast(this.t('failed', { label: this.t('defaultAction'), message: error.message }), this.COLORS.red));
+    this.screen.render();
+  },
+
+  setLanguage(language) {
+    if (!['en', 'zh'].includes(language) || this.language === language) return;
+    this.closeDropdownMenu();
+    this.language = language;
+    this.applyLanguage();
+  },
+
+  languageMenu(anchor) {
+    const mark = language => (this.language === language ? '{green-fg}●{/green-fg}' : ' ');
+    this.showMenu(this.t('language'), [
+      { label: `${mark('en')} ${this.t('english')}`, action: () => this.setLanguage('en') },
+      { label: `${mark('zh')} ${this.t('chinese')}`, action: () => this.setLanguage('zh') }
+    ], anchor);
+  },
+
   toast(message, color = this.COLORS.accent) {
     const text = String(message || '');
     const screenWidth = this.screen.width || 80;
     const maxWidth = Math.max(18, screenWidth - 4);
     const bodyLines = this.tooltipLines(text, Math.max(14, maxWidth - 4));
-    const bodyWidth = Math.max(...bodyLines.map(line => this.textWidth(line)), this.textWidth('提醒'), 12);
+    const title = this.t('notice');
+    const bodyWidth = Math.max(...bodyLines.map(line => this.textWidth(line)), this.textWidth(title), 12);
     const width = Math.min(maxWidth, Math.max(18, bodyWidth + 4));
     const innerWidth = width - 4;
     const innerHeight = Math.max(3, bodyLines.length + 2);
@@ -106,7 +142,7 @@ module.exports = {
     const bottomPadding = innerHeight - bodyLines.length - topPadding;
     const emptyBodyLine = `│ ${' '.repeat(innerWidth)} │`;
     const frame = [
-      this.titleFrameLine('提醒', width),
+      this.titleFrameLine(title, width),
       ...Array(topPadding).fill(emptyBodyLine),
       ...bodyLines.map(line => `│ ${this.padCenterDisplay(line, innerWidth)} │`),
       ...Array(bottomPadding).fill(emptyBodyLine),
@@ -132,7 +168,7 @@ module.exports = {
 
   setBusy(value, label = '') {
     this.state.busy = value;
-    this.footer.setContent(value ? ` {yellow-fg}正在执行：${this.escapeTags(label)}{/yellow-fg}` : ' 鼠标点击所有操作 · 提交消息可直接键盘输入 · 破坏性操作会要求确认');
+    this.footer.setContent(value ? ` {yellow-fg}${this.escapeTags(this.t('busy', { label }))}{/yellow-fg}` : this.t('footerIdle'));
     this.screen.render();
   },
 
@@ -143,8 +179,8 @@ module.exports = {
       this.clearDetailDiffView();
       const message = error && error.message ? error.message : String(error);
       this.state.busy = false;
-      this.footer.setContent(` {red-fg}操作异常：${this.escapeTags(message)}{/red-fg}`);
-      this.detailPanel.setLabel(' 程序异常 ');
+      this.footer.setContent(` {red-fg}${this.escapeTags(this.t('operationError', { message }))}{/red-fg}`);
+      this.detailPanel.setLabel(this.t('programError'));
       this.detailPanel.setContent(this.escapeTags(error && error.stack ? error.stack : message));
       this.screen.render();
     } catch (renderError) {
@@ -173,7 +209,7 @@ module.exports = {
       this.detailToggleButton.hide();
       return;
     }
-    this.detailToggleButton.setContent(this.detailDiffExpanded ? '折叠' : '展开');
+    this.detailToggleButton.setContent(this.detailDiffExpanded ? this.t('collapse') : this.t('expand'));
     this.detailToggleButton.show();
   },
 
@@ -183,9 +219,10 @@ module.exports = {
     this.detailDiffView = nextContext;
     this.updateDetailToggleButton();
     const args = this.detailDiffExpanded ? nextContext.expandedArgs : nextContext.collapsedArgs;
-    const diff = await this.git(args).catch(error => `无法读取差异：${error.message}`);
-    this.detailPanel.setLabel(nextContext.label);
-    this.detailPanel.setContent(this.formatDiff(diff || '没有可显示的文本差异。'));
+    const diff = await this.git(args).catch(error => this.t('cannotReadDiff', { message: error.message }));
+    const label = typeof nextContext.label === 'function' ? nextContext.label() : nextContext.label;
+    this.detailPanel.setLabel(label);
+    this.detailPanel.setContent(this.formatDiff(diff || this.t('noTextDiff')));
     this.detailPanel.setScroll(0);
     this.screen.render();
   },
@@ -194,7 +231,7 @@ module.exports = {
     if (!this.detailDiffView) return;
     const context = { ...this.detailDiffView };
     this.detailDiffExpanded = !this.detailDiffExpanded;
-    this.runUiAction(() => this.showDetailDiff(context), this.detailDiffExpanded ? '展开差异' : '折叠差异');
+    this.runUiAction(() => this.showDetailDiff(context), this.detailDiffExpanded ? this.t('expandDiff') : this.t('collapseDiff'));
   },
 
   async perform(label, operation, refresh = true, options = {}) {
@@ -203,10 +240,10 @@ module.exports = {
       this.setBusy(true, label);
       const result = await operation();
       if (refresh) await this.refreshRepo();
-      if (!options.silentSuccess) this.toast(`${label}完成`, this.COLORS.green);
+      if (!options.silentSuccess) this.toast(this.t('completed', { label }), this.COLORS.green);
       return result;
     } catch (error) {
-      this.toast(`${label}失败：${error.message}`, this.COLORS.red);
+      this.toast(this.t('failed', { label, message: error.message }), this.COLORS.red);
       return undefined;
     } finally {
       this.setBusy(false);
@@ -346,7 +383,7 @@ module.exports = {
         timer = null;
         if (!element.parent || element.detached || element.destroyed) return;
         const currentRequestId = ++requestId;
-        const text = await Promise.resolve(resolveText(data)).catch(error => `无法读取提示内容：${error.message}`);
+        const text = await Promise.resolve(resolveText(data)).catch(error => this.t('cannotReadTooltip', { message: error.message }));
         if (!hoverActive || currentRequestId !== requestId || !element.parent || element.detached || element.destroyed) return;
         this.showTooltip(text, element);
       }, delay);
@@ -414,14 +451,14 @@ module.exports = {
     this.resetScrollable(element);
   },
 
-  runUiAction(action, label = '操作') {
+  runUiAction(action, label = this.t('defaultAction')) {
     try {
       const result = action();
       if (result && typeof result.then === 'function') {
-        result.catch(error => this.toast(`${label}失败：${error.message}`, this.COLORS.red));
+        result.catch(error => this.toast(this.t('failed', { label, message: error.message }), this.COLORS.red));
       }
     } catch (error) {
-      this.toast(`${label}失败：${error.message}`, this.COLORS.red);
+      this.toast(this.t('failed', { label, message: error.message }), this.COLORS.red);
     }
   },
 
@@ -439,7 +476,7 @@ module.exports = {
       child.on('error', reject);
       child.on('close', code => {
         if (code === 0) resolve();
-        else reject(new Error((stderr || `剪贴板命令退出码 ${code}`).trim()));
+        else reject(new Error((stderr || this.t('clipboardExitCode', { code })).trim()));
       });
       child.stdin.end(value, 'utf8');
     });
@@ -490,8 +527,8 @@ module.exports = {
     const height = Math.min(contentHeight + 5, Math.max(7, this.screen.height - 2));
     const modal = this.box({ parent: this.screen, top: 'center', left: 'center', width, height, label: ` ${title} `, style: { fg: this.COLORS.text, bg: '#182235', border: { fg: this.COLORS.yellow } } });
     this.blessed.box({ parent: modal, top: 1, left: 2, right: 2, bottom: 3, scrollable: true, alwaysScroll: true, tags: true, content: this.escapeTags(text), style: { fg: this.COLORS.text, bg: '#182235' }, scrollbar: { ch: ' ', style: { bg: this.COLORS.accent } } });
-    const yes = this.button({ parent: modal, bottom: 1, left: Math.max(2, Math.floor(width * 0.25) - 4), width: 8, content: '确认', align: 'center' });
-    const no = this.button({ parent: modal, bottom: 1, right: Math.max(2, Math.floor(width * 0.25) - 4), width: 8, content: '取消', align: 'center' });
+    const yes = this.button({ parent: modal, bottom: 1, left: Math.max(2, Math.floor(width * 0.25) - 4), width: Math.max(8, this.textWidth(this.t('confirm')) + 2), content: this.t('confirm'), align: 'center' });
+    const no = this.button({ parent: modal, bottom: 1, right: Math.max(2, Math.floor(width * 0.25) - 4), width: Math.max(8, this.textWidth(this.t('cancel')) + 2), content: this.t('cancel'), align: 'center' });
     yes.on('press', () => { this.destroyElement(modal); this.runUiAction(onConfirm, title); this.screen.render(); });
     no.on('press', () => { this.destroyElement(modal); this.screen.render(); });
     this.screen.render();
@@ -517,11 +554,11 @@ module.exports = {
       style: { fg: this.COLORS.text, bg: '#101722', border: { fg: this.COLORS.border }, focus: { border: { fg: this.COLORS.accent } } }
     });
     const hint = this.blessed.box({ parent: modal, top: 4, left: 2, right: 2, height: 1, content: this.escapeTags(placeholder), style: { fg: this.COLORS.dim, bg: '#182235' } });
-    const cancel = this.button({ parent: modal, bottom: 1, left: 2, width: 11, content: '取消' });
-    const ok = this.button({ parent: modal, bottom: 1, right: 2, width: 14, content: '确认' });
+    const cancel = this.button({ parent: modal, bottom: 1, left: 2, width: Math.max(11, this.textWidth(this.t('cancel')) + 2), content: this.t('cancel') });
+    const ok = this.button({ parent: modal, bottom: 1, right: 2, width: Math.max(14, this.textWidth(this.t('confirm')) + 2), content: this.t('confirm') });
     const finish = () => {
       const value = input.getValue().trim();
-      if (!value) { this.toast('请输入内容', this.COLORS.yellow); return; }
+      if (!value) { this.toast(this.t('enterContent'), this.COLORS.yellow); return; }
       if (input._reading && typeof input._done === 'function') input._done('stop');
       this.destroyElement(modal);
       this.runUiAction(() => submit(value), title);

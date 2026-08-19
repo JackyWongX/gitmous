@@ -7,6 +7,7 @@ const path = require('path');
 const { COLORS } = require('./theme');
 const { createState } = require('./state');
 const { createLayout } = require('./ui/layout');
+const { createTranslator } = require('./i18n');
 
 class GitUiApp {
   constructor() {
@@ -18,6 +19,8 @@ class GitUiApp {
     this.fs = fs;
     this.path = path;
     this.COLORS = COLORS;
+    this.language = 'en';
+    this.t = createTranslator(() => this.language);
     this.state = createState();
     this.reportingUnhandledError = false;
     this.activeDropdownMenu = null;
@@ -36,10 +39,11 @@ class GitUiApp {
   }
 
   bindEvents() {
-    this.refreshButton.on('press', () => this.perform('刷新', () => this.refreshRepo(), false));
+    this.refreshButton.on('press', () => this.perform(this.t('refresh'), () => this.refreshRepo(), false));
     this.actionButton.on('press', () => this.actionMenu(this.actionButton));
     this.exitButton.on('press', () => { this.screen.destroy(); process.exit(0); });
     this.detailToggleButton.on('press', () => this.toggleDetailDiffView());
+    this.languageButton.on('press', () => this.languageMenu(this.languageButton));
     this.repoHeader.on('press', () => this.toggleSection('repositories'));
     this.commitHeader.on('press', () => this.toggleSection('commit'));
     this.changeHeader.on('press', () => this.toggleSection('changes'));
@@ -47,9 +51,9 @@ class GitUiApp {
     this.commitInput.on('keypress', () => setImmediate(() => this.resizeCommitInput()));
     this.commitInput.on('focus', () => { this.updateCommitPlaceholder(); this.screen.render(); });
     this.commitInput.on('blur', () => { this.updateCommitPlaceholder(); this.screen.render(); });
-    this.repoAddButton.on('press', () => this.inputDialog('添加仓库', '输入或粘贴 Git 仓库目录的完整路径', async directory => {
+    this.repoAddButton.on('press', () => this.inputDialog(this.t('addRepository'), this.t('repoPathPlaceholder'), async directory => {
       const root = await this.findGitRoot(directory);
-      if (!root) { this.toast('该目录不是 Git 仓库', this.COLORS.red); return; }
+      if (!root) { this.toast(this.t('notGitRepo'), this.COLORS.red); return; }
       if (!this.state.roots.includes(root)) this.state.roots.push(root);
       await this.selectRepo(root);
     }));
@@ -74,7 +78,7 @@ class GitUiApp {
     this.state.roots = await this.discoverRepositories(supplied);
     if (!this.state.roots.length) {
       this.renderAll();
-      this.setDetailText(null, ` 当前目录不是 Git 仓库：${supplied}\n\n可以在左侧“存储库”区域点击“初始化仓库”或“从远程分支克隆”。`);
+      this.setDetailText(null, this.t('noRepoDetail', { path: supplied }));
       this.screen.render();
       return;
     }
@@ -86,7 +90,7 @@ class GitUiApp {
 
   run() {
     this.bootstrap().catch(error => {
-      this.setDetailText(null, `初始化失败：${error.message}`);
+      this.setDetailText(null, this.t('initFailed', { message: error.message }));
       this.screen.render();
     });
   }

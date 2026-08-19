@@ -11,12 +11,12 @@ module.exports = {
   },
 
   commitActionState() {
-    if (this.state.status.staged.length > 0 || this.hasAnyChanges()) return { mode: 'commit', label: '提交' };
-    if (!this.state.repo) return { mode: 'none', label: '提交' };
-    if (!this.state.upstream) return { mode: 'publish', label: '发布分支' };
-    if (this.state.behind > 0) return { mode: 'pull', label: '↓ 拉取' };
-    if (this.state.ahead > 0) return { mode: 'push', label: '↑ 推送' };
-    return { mode: 'commit', label: '提交' };
+    if (this.state.status.staged.length > 0 || this.hasAnyChanges()) return { mode: 'commit', label: this.t('commitButton') };
+    if (!this.state.repo) return { mode: 'none', label: this.t('commitButton') };
+    if (!this.state.upstream) return { mode: 'publish', label: this.t('publishButton') };
+    if (this.state.behind > 0) return { mode: 'pull', label: this.t('pull') };
+    if (this.state.ahead > 0) return { mode: 'push', label: this.t('push') };
+    return { mode: 'commit', label: this.t('commitButton') };
   },
 
   updateCommitButton() {
@@ -127,10 +127,10 @@ module.exports = {
     this.historyPanel.top = top;
     this.historyPanel.height = Math.max(1, actualHistoryHeight);
 
-    this.updateSectionHeader(this.repoHeader, 'repositories', '存储库');
-    this.updateSectionHeader(this.commitHeader, 'commit', '提交');
-    this.updateSectionHeader(this.changeHeader, 'changes', '更改');
-    this.updateSectionHeader(this.historyHeader, 'history', '提交历史');
+    this.updateSectionHeader(this.repoHeader, 'repositories', this.t('repositories'));
+    this.updateSectionHeader(this.commitHeader, 'commit', this.t('commit'));
+    this.updateSectionHeader(this.changeHeader, 'changes', this.t('changes'));
+    this.updateSectionHeader(this.historyHeader, 'history', this.t('history'));
     this.setVisible(this.repoAddButton, !this.state.collapsed.repositories);
     this.setVisible(this.repoArea, !this.state.collapsed.repositories);
     this.setVisible(this.commitInput, !this.state.collapsed.commit);
@@ -168,24 +168,24 @@ module.exports = {
   handleCommitButton() {
     const action = this.commitActionState();
     if (action.mode === 'publish') {
-      this.runUiAction(() => this.publishCurrentBranch(this.commitButton), '发布分支');
+      this.runUiAction(() => this.publishCurrentBranch(this.commitButton), this.t('publishBranch'));
       return;
     }
     if (action.mode === 'push') {
-      this.runUiAction(() => this.pushCurrentBranch(), '推送');
+      this.runUiAction(() => this.pushCurrentBranch(), this.t('pushAction'));
       return;
     }
     if (action.mode === 'pull') {
-      this.runUiAction(() => this.pullCurrentBranch(), '拉取');
+      this.runUiAction(() => this.pullCurrentBranch(), this.t('pullAction'));
       return;
     }
     const message = this.commitInput.getValue().trim();
-    if (!message) { this.toast('请输入提交消息', this.COLORS.yellow); this.focusCommitInput(); return; }
-    this.runUiAction(() => this.perform('提交', async () => {
+    if (!message) { this.toast(this.t('commitMessageRequired'), this.COLORS.yellow); this.focusCommitInput(); return; }
+    this.runUiAction(() => this.perform(this.t('commit'), async () => {
       if (!this.state.status.staged.length) await this.git(['add', '-A']);
       await this.git(['commit', '-m', message]);
       this.commitInput.clearValue();
       this.resizeCommitInput();
-    }), '提交');
+    }), this.t('commit'));
   }
 };
