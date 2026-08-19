@@ -76,11 +76,12 @@ module.exports = {
 
   async refreshRepo() {
     if (!this.state.repo) return;
-    const [statusRaw, branch, remote, remoteRefsRaw, history] = await Promise.all([
+    const [statusRaw, branch, remote, remoteRefsRaw, head, history] = await Promise.all([
       this.git(['status', '--porcelain=v1', '-z']),
       this.git(['branch', '--show-current']),
       this.git(['remote']).catch(() => ''),
       this.git(['for-each-ref', '--format=%(objectname)%09%(refname:short)', 'refs/remotes']).catch(() => ''),
+      this.git(['rev-parse', 'HEAD']).catch(() => ''),
       this.git(['log', '-n', '180', '--date=short', '--pretty=format:%H%x09%h%x09%ad%x09%an%x09%s']).catch(() => '')
     ]);
     this.state.status = this.parseStatus(statusRaw);
@@ -95,6 +96,7 @@ module.exports = {
       this.state.ahead = Number(counts[0]) || 0;
       this.state.behind = Number(counts[1]) || 0;
     }
+    this.state.repoSignature = this.repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, this.state.upstream, this.state.ahead, this.state.behind);
     this.state.remoteRefs = new Map();
     remoteRefsRaw.split(/\r?\n/).filter(Boolean).forEach(line => {
       const [hash, name] = line.split('\t');
@@ -108,5 +110,38 @@ module.exports = {
       return { fullHash, hash, date, author, subject: subjectParts.join('\t') };
     }) : [];
     this.renderAll();
+  },
+
+  repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, upstream, ahead, behind) {
+    return [
+      statusRaw || '',
+      String(branch || '').trim(),
+      remote || '',
+      remoteRefsRaw || '',
+      String(head || '').trim(),
+      upstream || '',
+      ahead || 0,
+      behind || 0
+    ].join('\u001f');
+  },
+
+  async readRepoSignature() {
+    if (!this.state.repo) return '';
+    const [statusRaw, branch, remote, remoteRefsRaw, head] = await Promise.all([
+      this.git(['status', '--porcelain=v1', '-z']),
+      this.git(['branch', '--show-current']),
+      this.git(['remote']).catch(() => ''),
+      this.git(['for-each-ref', '--format=%(objectname)%09%(refname:short)', 'refs/remotes']).catch(() => ''),
+      this.git(['rev-parse', 'HEAD']).catch(() => '')
+    ]);
+    const upstream = (await this.git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => '')).trim();
+    let ahead = 0;
+    let behind = 0;
+    if (upstream) {
+      const counts = (await this.git(['rev-list', '--left-right', '--count', 'HEAD...@{u}']).catch(() => '0\t0')).trim().split(/\s+/);
+      ahead = Number(counts[0]) || 0;
+      behind = Number(counts[1]) || 0;
+    }
+    return this.repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, upstream, ahead, behind);
   }
 };

@@ -65,11 +65,14 @@ module.exports = {
     if (staged) {
       const unstageAll = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
       actionButtons.push(unstageAll);
+      this.bindTooltip(unstageAll, '取消所有暂存：把“暂存的更改”全部移回“更改”区域');
       unstageAll.on('press', () => this.perform('取消所有暂存', () => this.git(['reset', 'HEAD']).catch(() => this.git(['rm', '--cached', '-r', '--ignore-unmatch', '--', '.']))));
     } else {
       const discardAll = this.button({ parent: this.changeContent, top, right: 3, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
       const stageAll = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '+', style: this.iconStyle });
       actionButtons.push(discardAll, stageAll);
+      this.bindTooltip(discardAll, '撤销所有更改：丢弃“更改”区域中的全部本地修改');
+      this.bindTooltip(stageAll, '暂存所有更改：把“更改”区域中的全部文件加入暂存区');
       discardAll.on('press', () => this.discardAllChanges());
       stageAll.on('press', () => this.perform('暂存所有更改', () => this.git(['add', '-A'])));
     }
@@ -84,15 +87,19 @@ module.exports = {
       const rowElements = [rowBg];
       const main = this.button({ parent: this.changeContent, top: row, left: 2, right: staged ? 3 : 6, height: 1, shrink: false, padding: { left: 0, right: 0 }, tags: true, content: `{${marker.tag}}${marker.label}{/${marker.tag}}  ${this.escapeTags(item.file)}` });
       rowElements.push(main);
+      this.bindTooltip(main, `查看差异：${item.file}`);
       main.on('press', () => this.showFileDiff(item, staged));
       if (staged) {
         const unstageButton = this.button({ parent: this.changeContent, top: row, right: 0, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
         rowElements.push(unstageButton);
+        this.bindTooltip(unstageButton, `取消暂存：${item.file}`);
         unstageButton.on('press', () => this.unstage(item.file));
       } else {
         const undoButton = this.button({ parent: this.changeContent, top: row, right: 3, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
         const stageButton = this.button({ parent: this.changeContent, top: row, right: 0, width: 3, height: 1, shrink: false, content: '+', style: this.iconStyle });
         rowElements.push(undoButton, stageButton);
+        this.bindTooltip(undoButton, `撤销更改：${item.file}`);
+        this.bindTooltip(stageButton, `暂存：${item.file}`);
         undoButton.on('press', () => this.discard(item.file, item.code === '??'));
         stageButton.on('press', () => this.stage(item.file));
       }

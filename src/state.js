@@ -12,6 +12,7 @@ function createState() {
     upstream: '',
     ahead: 0,
     behind: 0,
+    repoSignature: '',
     status: { staged: [], unstaged: [], untracked: [] },
     history: [],
     remoteRefs: new Map(),

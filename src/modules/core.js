@@ -72,13 +72,62 @@ module.exports = {
     return this.normalizePath(left) === this.normalizePath(right);
   },
 
+  padRightDisplay(value, width) {
+    const text = String(value || '');
+    return text + ' '.repeat(Math.max(0, width - this.textWidth(text)));
+  },
+
+  padCenterDisplay(value, width) {
+    const text = String(value || '');
+    const padding = Math.max(0, width - this.textWidth(text));
+    const left = Math.floor(padding / 2);
+    const right = padding - left;
+    return `${' '.repeat(left)}${text}${' '.repeat(right)}`;
+  },
+
+  titleFrameLine(title, width) {
+    const text = String(title || '');
+    const lineWidth = Math.max(2, width - this.textWidth(text) - 2);
+    const left = Math.floor(lineWidth / 2);
+    const right = lineWidth - left;
+    return `┌${'─'.repeat(left)}${text}${'─'.repeat(right)}┐`;
+  },
+
   toast(message, color = this.COLORS.accent) {
-    const width = Math.min(
-      Math.max(18, this.textWidth(message) + 8),
-      Math.max(18, (this.screen.width || 80) - 4)
-    );
-    const notice = this.blessed.message({ parent: this.screen, top: 'center', left: 'center', width, height: 'shrink', border: 'line', tags: true, style: { fg: this.COLORS.text, bg: '#172133', border: { fg: color } } });
-    notice.display(` {bold}${this.escapeTags(message)}{/bold} `, 2, () => this.destroyElement(notice));
+    const text = String(message || '');
+    const screenWidth = this.screen.width || 80;
+    const maxWidth = Math.max(18, screenWidth - 4);
+    const bodyLines = this.tooltipLines(text, Math.max(14, maxWidth - 4));
+    const bodyWidth = Math.max(...bodyLines.map(line => this.textWidth(line)), this.textWidth('提醒'), 12);
+    const width = Math.min(maxWidth, Math.max(18, bodyWidth + 4));
+    const innerWidth = width - 4;
+    const innerHeight = Math.max(3, bodyLines.length + 2);
+    const topPadding = Math.floor((innerHeight - bodyLines.length) / 2);
+    const bottomPadding = innerHeight - bodyLines.length - topPadding;
+    const emptyBodyLine = `│ ${' '.repeat(innerWidth)} │`;
+    const frame = [
+      this.titleFrameLine('提醒', width),
+      ...Array(topPadding).fill(emptyBodyLine),
+      ...bodyLines.map(line => `│ ${this.padCenterDisplay(line, innerWidth)} │`),
+      ...Array(bottomPadding).fill(emptyBodyLine),
+      `└${'─'.repeat(width - 2)}┘`
+    ];
+    const notice = this.blessed.box({
+      parent: this.screen,
+      top: 'center',
+      left: 'center',
+      width,
+      height: frame.length,
+      tags: true,
+      mouse: true,
+      content: this.escapeTags(frame.join('\n')),
+      style: { fg: color, bg: this.COLORS.panel }
+    });
+    this.screen.render();
+    setTimeout(() => {
+      this.destroyElement(notice);
+      this.screen.render();
+    }, 2000);
   },
 
   setBusy(value, label = '') {
@@ -169,6 +218,102 @@ module.exports = {
     this.screen.render();
   },
 
+  tooltipLines(text, maxWidth) {
+    const rawLines = String(text || '').split(/\r?\n/);
+    const lines = [];
+    rawLines.forEach(rawLine => {
+      let current = '';
+      let currentWidth = 0;
+      for (const char of rawLine) {
+        const charWidth = this.textWidth(char);
+        if (current && currentWidth + charWidth > maxWidth) {
+          lines.push(current);
+          current = char;
+          currentWidth = charWidth;
+        } else {
+          current += char;
+          currentWidth += charWidth;
+        }
+      }
+      lines.push(current);
+    });
+    return lines.length ? lines.slice(0, 8) : [''];
+  },
+
+  hideTooltip(anchor = null) {
+    if (anchor && this.activeTooltipAnchor && anchor !== this.activeTooltipAnchor) return;
+    if (this.activeTooltip) {
+      const tooltip = this.activeTooltip;
+      this.activeTooltip = null;
+      this.activeTooltipAnchor = null;
+      this.destroyElement(tooltip);
+      this.screen.render();
+      return;
+    }
+    this.activeTooltipAnchor = null;
+  },
+
+  showTooltip(text, anchor) {
+    const value = String(text || '').trim();
+    if (!value || this.activeDropdownMenu) return;
+    this.hideTooltip();
+    const screenWidth = this.screen.width || 80;
+    const screenHeight = this.screen.height || 24;
+    const maxContentWidth = Math.max(16, Math.min(56, screenWidth - 6));
+    const lines = this.tooltipLines(value, maxContentWidth);
+    const contentWidth = Math.max(...lines.map(line => this.textWidth(line)), 8);
+    const width = Math.min(screenWidth - 2, contentWidth + 4);
+    const height = Math.min(screenHeight - 2, lines.length + 2);
+    const position = this.anchorPosition(anchor, width, height);
+    position.left = Math.min(Math.max(1, screenWidth - width - 1), position.left + 6);
+    const tooltip = this.box({
+      parent: this.screen,
+      top: position.top,
+      left: position.left,
+      width,
+      height,
+      tags: true,
+      border: 'line',
+      style: { fg: this.COLORS.text, bg: '#202838', border: { fg: this.COLORS.border } }
+    });
+    tooltip.setContent(lines.map(line => ` ${this.escapeTags(line)}`).join('\n'));
+    this.activeTooltip = tooltip;
+    this.activeTooltipAnchor = anchor;
+    this.screen.render();
+  },
+
+  bindTooltip(element, textOrFactory, options = {}) {
+    if (!element) return;
+    const delay = Number(options.delay || 250);
+    let timer = null;
+    const resolveText = data => (typeof textOrFactory === 'function' ? textOrFactory(data) : textOrFactory);
+    const clearTimer = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+    };
+    element.on('mouseover', data => {
+      clearTimer();
+      timer = setTimeout(() => {
+        timer = null;
+        if (!element.parent || element.detached || element.destroyed) return;
+        const text = resolveText(data);
+        this.showTooltip(text, element);
+      }, delay);
+    });
+    element.on('mouseout', () => {
+      clearTimer();
+      this.hideTooltip(element);
+    });
+    element.on('press', () => {
+      clearTimer();
+      this.hideTooltip(element);
+    });
+    element.on('click', () => {
+      clearTimer();
+      this.hideTooltip(element);
+    });
+  },
+
   disposeTree(element) {
     if (!element) return;
     [...element.children].forEach(child => this.disposeTree(child));
@@ -188,6 +333,7 @@ module.exports = {
   },
 
   closeDropdownMenu() {
+    this.hideTooltip();
     if (this.activeDropdownOutsideHandler) {
       this.screen.removeListener('mouse', this.activeDropdownOutsideHandler);
       this.activeDropdownOutsideHandler = null;
@@ -200,6 +346,7 @@ module.exports = {
   },
 
   clearChildren(element) {
+    this.hideTooltip();
     this.clearScreenMouseRefs(element);
     const children = [...element.children];
     element.children.length = 0;
@@ -244,7 +391,12 @@ module.exports = {
   anchorPosition(anchor, width, height) {
     const fallback = { top: 2, left: Math.max(1, this.screen.width - width - 2) };
     if (!anchor || !anchor.parent) return fallback;
-    const pos = anchor.lpos || anchor._getCoords();
+    let pos = null;
+    try {
+      pos = anchor.lpos || (typeof anchor._getCoords === 'function' ? anchor._getCoords() : null);
+    } catch (_) {
+      pos = null;
+    }
     if (!pos) return fallback;
     const maxLeft = Math.max(1, this.screen.width - width - 1);
     const left = Math.min(maxLeft, Math.max(1, pos.xi));
@@ -263,7 +415,12 @@ module.exports = {
   },
 
   pointInside(element, data) {
-    const pos = element && (element.lpos || element._getCoords());
+    let pos = null;
+    try {
+      pos = element && (element.lpos || (typeof element._getCoords === 'function' ? element._getCoords() : null));
+    } catch (_) {
+      pos = null;
+    }
     if (!pos || data.x == null || data.y == null) return false;
     return data.x >= pos.xi && data.x < pos.xl && data.y >= pos.yi && data.y < pos.yl;
   },

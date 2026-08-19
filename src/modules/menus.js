@@ -53,13 +53,16 @@ module.exports = {
 
   async branchSwitchMenu(anchor) {
     const branches = await this.localBranches();
-    const entries = branches.length
-      ? branches.map(name => ({
-        label: `${name === this.state.branch ? '{green-fg}●{/green-fg} ' : '○ '}切换到 ${this.escapeTags(name)}`,
-        action: () => name === this.state.branch ? this.toast('已在当前分支') : this.perform(`切换到 ${name}`, () => this.git(['switch', name]))
-      }))
-      : [{ label: '没有本地分支', action: () => {} }];
-    this.showMenu('切换分支', entries, anchor);
+    const entries = [
+      ...(branches.length
+        ? branches.map(name => ({
+          label: `${name === this.state.branch ? '{green-fg}●{/green-fg}' : ' '} ${this.escapeTags(name)}`,
+          action: () => name === this.state.branch ? this.toast('已在当前分支') : this.perform(`切换到 ${name}`, () => this.git(['switch', name]))
+        }))
+        : [{ label: '没有本地分支', action: () => {} }]),
+      { label: '{green-fg}+{/green-fg} 创建分支', action: () => this.textDialog('创建分支', '输入新分支名', name => this.perform('创建分支', () => this.git(['switch', '-c', name]))) }
+    ];
+    this.showMenu('分支管理', entries, anchor);
   },
 
   async branchMenu(anchor) {

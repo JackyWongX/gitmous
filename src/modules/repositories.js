@@ -41,7 +41,7 @@ module.exports = {
         parent: this.repoContent,
         top: row + index,
         left: 0,
-        right: active ? 12 : 0,
+        right: active ? 16 : 0,
         height: 1,
         shrink: false,
         padding: { left: 0, right: 0 },
@@ -57,10 +57,10 @@ module.exports = {
           parent: this.repoContent,
           top: row + index,
           right: 5,
-          width: 6,
+          width: 10,
           height: 1,
           shrink: false,
-          content: '分支',
+          content: '分支管理',
           style: rowStyle
         });
         const moreButton = this.button({

@@ -1,8 +1,8 @@
 'use strict';
 
 const COLORS = {
-  bg: '#10141d',
-  panel: '#171c28',
+  bg: undefined,
+  panel: undefined,
   panelAlt: '#1d2432',
   border: '#39455d',
   text: '#dbe5f5',

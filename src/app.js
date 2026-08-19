@@ -22,9 +22,14 @@ class GitUiApp {
     this.reportingUnhandledError = false;
     this.activeDropdownMenu = null;
     this.activeDropdownOutsideHandler = null;
+    this.activeTooltip = null;
+    this.activeTooltipAnchor = null;
+    this.autoRefreshTimer = null;
+    this.autoRefreshRunning = false;
 
     createLayout(this);
     this.bindEvents();
+    this.startAutoRefresh();
   }
 
   bindEvents() {
@@ -80,6 +85,27 @@ class GitUiApp {
       this.detailPanel.setContent(`初始化失败：${error.message}`);
       this.screen.render();
     });
+  }
+
+  startAutoRefresh() {
+    if (this.autoRefreshTimer) return;
+    this.autoRefreshTimer = setInterval(() => {
+      this.checkAutoRefresh().catch(() => {});
+    }, 2000);
+    if (typeof this.autoRefreshTimer.unref === 'function') this.autoRefreshTimer.unref();
+  }
+
+  async checkAutoRefresh() {
+    if (!this.state.repo || this.state.busy || this.autoRefreshRunning) return;
+    this.autoRefreshRunning = true;
+    try {
+      const signature = await this.readRepoSignature();
+      if (signature && signature !== this.state.repoSignature) {
+        await this.refreshRepo();
+      }
+    } finally {
+      this.autoRefreshRunning = false;
+    }
   }
 }
 

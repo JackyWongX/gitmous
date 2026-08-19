@@ -41,6 +41,9 @@ module.exports = {
         }
         this.toggleCommitFiles(commit);
       });
+      if (this.shouldShowCommitTooltip(commit, rightMarker)) {
+        this.bindTooltip(commitButton, () => this.commitTooltipText(commit, remoteBranches, index === 0), { delay: 350 });
+      }
       row += 1;
       if (!expanded) return;
 
@@ -70,12 +73,31 @@ module.exports = {
           content: `{${marker.tag}}${marker.label}{/${marker.tag}}  ${this.escapeTags(fileItem.file)}${renameText}`,
           style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
         });
+        this.bindTooltip(fileButton, `查看该提交中的文件差异：${fileItem.file}`);
         fileButton.on('press', () => this.showCommitFileDiff(commit, fileItem));
         row += 1;
       });
     });
     this.historyContent.height = Math.max(1, row);
     this.resetScrollable(this.historyArea);
+  },
+
+  shouldShowCommitTooltip(commit, rightMarker) {
+    return Boolean(rightMarker) || this.textWidth(commit.subject || '') > 36;
+  },
+
+  commitTooltipText(commit, remoteBranches, isLatestCommit) {
+    const lines = [
+      `提交：${commit.fullHash || commit.hash}`,
+      `作者：${commit.author || '未知'}`,
+      `日期：${commit.date || '未知'}`
+    ];
+    const branchName = this.latestBranchMarker(isLatestCommit).replace(/\{\/?[^}]+}/g, '');
+    if (branchName) lines.push(`本地分支：${branchName}`);
+    const remoteNames = remoteBranches.filter(name => name.includes('/'));
+    if (remoteNames.length) lines.push(`远程分支：${remoteNames.join(', ')}`);
+    lines.push(`内容：${commit.subject || '(无提交内容)'}`);
+    return lines.join('\n');
   },
 
   historyRightMarker(remoteBranches, isLatestCommit) {
