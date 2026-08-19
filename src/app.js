@@ -27,6 +27,8 @@ class GitUiApp {
     this.autoRefreshTimer = null;
     this.autoRefreshRunning = false;
     this.commitInputActive = false;
+    this.detailDiffView = null;
+    this.detailDiffExpanded = false;
 
     createLayout(this);
     this.bindEvents();
@@ -37,7 +39,7 @@ class GitUiApp {
     this.refreshButton.on('press', () => this.perform('刷新', () => this.refreshRepo(), false));
     this.actionButton.on('press', () => this.actionMenu(this.actionButton));
     this.exitButton.on('press', () => { this.screen.destroy(); process.exit(0); });
-    this.screenExitButton.on('press', () => { this.screen.destroy(); process.exit(0); });
+    this.detailToggleButton.on('press', () => this.toggleDetailDiffView());
     this.repoHeader.on('press', () => this.toggleSection('repositories'));
     this.commitHeader.on('press', () => this.toggleSection('commit'));
     this.changeHeader.on('press', () => this.toggleSection('changes'));
@@ -72,7 +74,7 @@ class GitUiApp {
     this.state.roots = await this.discoverRepositories(supplied);
     if (!this.state.roots.length) {
       this.renderAll();
-      this.detailPanel.setContent(` 当前目录不是 Git 仓库：${supplied}\n\n可以在左侧“存储库”区域点击“初始化仓库”或“从远程分支克隆”。`);
+      this.setDetailText(null, ` 当前目录不是 Git 仓库：${supplied}\n\n可以在左侧“存储库”区域点击“初始化仓库”或“从远程分支克隆”。`);
       this.screen.render();
       return;
     }
@@ -84,7 +86,7 @@ class GitUiApp {
 
   run() {
     this.bootstrap().catch(error => {
-      this.detailPanel.setContent(`初始化失败：${error.message}`);
+      this.setDetailText(null, `初始化失败：${error.message}`);
       this.screen.render();
     });
   }

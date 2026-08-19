@@ -129,7 +129,7 @@ module.exports = {
   async branchMenu(anchor) {
     const branches = await this.localBranches();
     this.showMenu('分支管理', [
-      { label: '新建分支', action: () => this.textDialog('新建分支', '通过屏幕软键盘输入分支名', name => this.perform('创建分支', () => this.git(['switch', '-c', name]))) },
+      { label: '新建分支', action: () => this.textDialog('新建分支', '输入新分支名', name => this.perform('创建分支', () => this.git(['switch', '-c', name]))) },
       { label: '合并分支', action: menuAnchor => this.mergeMenu(branches, menuAnchor) },
       { label: '删除分支', action: menuAnchor => this.deleteBranchMenu(branches, menuAnchor) },
       ...branches.map(name => ({ label: `${name === this.state.branch ? '{green-fg}●{/green-fg} ' : '○ '}切换到 ${this.escapeTags(name)}`, action: () => name === this.state.branch ? this.toast('已在当前分支') : this.perform(`切换到 ${name}`, () => this.git(['switch', name])) }))
@@ -157,7 +157,7 @@ module.exports = {
 
   stashDetailMenu(index, stash, anchor) {
     this.showMenu(`储藏 ${index}`, [
-      { label: '查看差异', action: async () => { const diff = await this.git(['stash', 'show', '-p', `stash@{${index}}`]); this.detailPanel.setContent(this.formatDiff(diff)); this.detailPanel.setLabel(` 储藏：${index} `); this.screen.render(); } },
+      { label: '查看差异', action: async () => { const diff = await this.git(['stash', 'show', '-p', `stash@{${index}}`]); this.setDetailText(` 储藏：${index} `, this.formatDiff(diff)); this.screen.render(); } },
       { label: '应用但保留', action: () => this.perform('应用储藏', () => this.git(['stash', 'apply', `stash@{${index}}`])) },
       { label: '弹出并删除', action: () => this.perform('弹出储藏', () => this.git(['stash', 'pop', `stash@{${index}}`])) },
       { label: '{red-fg}删除储藏{/red-fg}', action: () => this.confirm('删除储藏', `删除 ${stash} 吗？`, () => this.perform('删除储藏', () => this.git(['stash', 'drop', `stash@{${index}}`]))) }
@@ -176,7 +176,7 @@ module.exports = {
     const names = (await this.git(['remote']).catch(() => '')).split(/\r?\n/).filter(Boolean);
     this.showMenu('远程仓库', [
       { label: '添加远程仓库', action: () => this.textDialog('远程名称', '例如 origin', name => this.textDialog('远程地址', '例如 https://example.com/repo.git', url => this.perform('添加远程', () => this.git(['remote', 'add', name, url])))) },
-      ...names.map(name => ({ label: `查看 ${this.escapeTags(name)}`, action: async () => { const url = await this.git(['remote', 'get-url', name]); this.detailPanel.setLabel(' 远程仓库 '); this.detailPanel.setContent(`${name}\n${url}`); this.screen.render(); } })),
+      ...names.map(name => ({ label: `查看 ${this.escapeTags(name)}`, action: async () => { const url = await this.git(['remote', 'get-url', name]); this.setDetailText(' 远程仓库 ', `${name}\n${url}`); this.screen.render(); } })),
       ...names.map(name => ({ label: `{red-fg}删除远程{/red-fg} ${this.escapeTags(name)}`, action: () => this.confirm('删除远程', `删除远程 ${name} 吗？`, () => this.perform('删除远程', () => this.git(['remote', 'remove', name]))) }))
     ], anchor);
   },
@@ -195,7 +195,7 @@ module.exports = {
   repositoryMenu(anchor) {
     this.showMenu('存储库', [
       { label: '刷新当前存储库', action: () => this.perform('刷新', () => this.refreshRepo(), false) },
-      { label: '查看当前存储库路径', action: () => { this.detailPanel.setLabel(' 存储库路径 '); this.detailPanel.setContent(this.escapeTags(this.state.repo || '未选择')); this.screen.render(); } }
+      { label: '查看当前存储库路径', action: () => { this.setDetailText(' 存储库路径 ', this.escapeTags(this.state.repo || '未选择')); this.screen.render(); } }
     ], anchor);
   }
 };

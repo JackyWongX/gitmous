@@ -140,6 +140,7 @@ module.exports = {
     if (this.reportingUnhandledError) return;
     this.reportingUnhandledError = true;
     try {
+      this.clearDetailDiffView();
       const message = error && error.message ? error.message : String(error);
       this.state.busy = false;
       this.footer.setContent(` {red-fg}操作异常：${this.escapeTags(message)}{/red-fg}`);
@@ -152,6 +153,48 @@ module.exports = {
     } finally {
       this.reportingUnhandledError = false;
     }
+  },
+
+  clearDetailDiffView() {
+    this.detailDiffView = null;
+    if (this.detailToggleButton) this.detailToggleButton.hide();
+  },
+
+  setDetailText(label, content) {
+    this.clearDetailDiffView();
+    if (label) this.detailPanel.setLabel(label);
+    this.detailPanel.setContent(content);
+    this.detailPanel.setScroll(0);
+  },
+
+  updateDetailToggleButton() {
+    if (!this.detailToggleButton) return;
+    if (!this.detailDiffView) {
+      this.detailToggleButton.hide();
+      return;
+    }
+    this.detailToggleButton.setContent(this.detailDiffExpanded ? '折叠' : '展开');
+    this.detailToggleButton.show();
+  },
+
+  async showDetailDiff(context, expanded = this.detailDiffExpanded) {
+    if (typeof expanded === 'boolean') this.detailDiffExpanded = expanded;
+    const nextContext = { ...context };
+    this.detailDiffView = nextContext;
+    this.updateDetailToggleButton();
+    const args = this.detailDiffExpanded ? nextContext.expandedArgs : nextContext.collapsedArgs;
+    const diff = await this.git(args).catch(error => `无法读取差异：${error.message}`);
+    this.detailPanel.setLabel(nextContext.label);
+    this.detailPanel.setContent(this.formatDiff(diff || '没有可显示的文本差异。'));
+    this.detailPanel.setScroll(0);
+    this.screen.render();
+  },
+
+  toggleDetailDiffView() {
+    if (!this.detailDiffView) return;
+    const context = { ...this.detailDiffView };
+    this.detailDiffExpanded = !this.detailDiffExpanded;
+    this.runUiAction(() => this.showDetailDiff(context), this.detailDiffExpanded ? '展开差异' : '折叠差异');
   },
 
   async perform(label, operation, refresh = true, options = {}) {
@@ -455,25 +498,7 @@ module.exports = {
   },
 
   textDialog(title, placeholder, submit) {
-    const modal = this.box({ parent: this.screen, top: 'center', left: 'center', width: 72, height: 16, label: ` ${title} `, style: { fg: this.COLORS.text, bg: '#182235', border: { fg: this.COLORS.accent } } });
-    const input = this.blessed.textbox({ parent: modal, top: 1, left: 2, right: 2, height: 3, mouse: true, inputOnFocus: false, keys: false, value: '', border: 'line', style: { fg: this.COLORS.text, bg: '#101722', border: { fg: this.COLORS.border } } });
-    input.setValue('');
-    this.blessed.box({ parent: modal, top: 4, left: 2, right: 2, height: 1, content: this.escapeTags(placeholder), style: { fg: this.COLORS.dim, bg: '#182235' } });
-    const chars = ['A B C D E F G H I J K L M', 'N O P Q R S T U V W X Y Z', 'a b c d e f g h i j k l m', 'n o p q r s t u v w x y z', '0 1 2 3 4 5 6 7 8 9 - _ / . : @'];
-    chars.forEach((line, row) => {
-      const values = line.split(' ');
-      values.forEach((char, col) => {
-        const key = this.button({ parent: modal, top: 5 + row, left: 2 + col * 5, width: 4, height: 1, content: char, align: 'center' });
-        key.on('press', () => { input.setValue(input.getValue() + char); this.screen.render(); });
-      });
-    });
-    const back = this.button({ parent: modal, bottom: 1, left: 2, width: 11, content: '退格' });
-    const cancel = this.button({ parent: modal, bottom: 1, left: 16, width: 11, content: '取消' });
-    const ok = this.button({ parent: modal, bottom: 1, right: 2, width: 14, content: '确认' });
-    back.on('press', () => { input.setValue(input.getValue().slice(0, -1)); this.screen.render(); });
-    cancel.on('press', () => { this.destroyElement(modal); this.screen.render(); });
-    ok.on('press', () => { const value = input.getValue().trim(); if (!value) { this.toast('请输入内容', this.COLORS.yellow); return; } this.destroyElement(modal); this.runUiAction(() => submit(value), title); this.screen.render(); });
-    this.screen.render();
+    this.inputDialog(title, placeholder, submit);
   },
 
   inputDialog(title, placeholder, submit) {
@@ -590,15 +615,104 @@ module.exports = {
     this.screen.render();
   },
 
+  diffLineNumberPrefix(oldLine, newLine) {
+    const oldText = oldLine == null ? ' '.repeat(5) : String(oldLine).padStart(5);
+    const newText = newLine == null ? ' '.repeat(5) : String(newLine).padStart(5);
+    return `{gray-fg}${oldText} ${newText} │{/gray-fg} `;
+  },
+
+  diffBodyWidth() {
+    const fallback = Math.max(24, Math.floor((this.screen.width || 100) * 0.58) - 18);
+    const pos = this.detailPanel && this.detailPanel.lpos;
+    if (!pos) return fallback;
+    return Math.max(16, pos.xl - pos.xi - 18);
+  },
+
+  splitDisplayLine(line, maxWidth) {
+    const text = String(line || '');
+    if (!text) return [''];
+    const parts = [];
+    let current = '';
+    let width = 0;
+    for (const char of text) {
+      const charWidth = this.textWidth(char);
+      if (current && width + charWidth > maxWidth) {
+        parts.push(current);
+        current = '';
+        width = 0;
+      }
+      current += char;
+      width += charWidth;
+    }
+    parts.push(current);
+    return parts;
+  },
+
+  diffLineKind(line) {
+    if (/^@@/.test(line)) return 'hunk';
+    if (/^\+\+\+|^---/.test(line)) return 'file';
+    if (/^\+/.test(line)) return 'add';
+    if (/^-/.test(line)) return 'delete';
+    if (/^diff |^index |^commit |^new file |^deleted file |^similarity |^rename |^Binary files /.test(line)) return 'meta';
+    if (/^\\ No newline at end of file/.test(line)) return 'dim';
+    return 'text';
+  },
+
+  colorizeDiffLine(line, forcedKind = null) {
+    const kind = forcedKind || this.diffLineKind(line);
+    const safe = this.escapeTags(line);
+    if (kind === 'hunk') return `{cyan-fg}${safe}{/cyan-fg}`;
+    if (kind === 'file') return `{bold}${safe}{/bold}`;
+    if (kind === 'add') return `{green-fg}${safe}{/green-fg}`;
+    if (kind === 'delete') return `{red-fg}${safe}{/red-fg}`;
+    if (kind === 'meta') return `{yellow-fg}${safe}{/yellow-fg}`;
+    if (kind === 'dim') return `{gray-fg}${safe}{/gray-fg}`;
+    return safe;
+  },
+
+  formatDiffDisplayLine(line, oldLine, newLine, forcedKind = null) {
+    const kind = forcedKind || this.diffLineKind(line);
+    return this.splitDisplayLine(line, this.diffBodyWidth()).map((part, index) => {
+      const prefix = index === 0
+        ? this.diffLineNumberPrefix(oldLine, newLine)
+        : this.diffLineNumberPrefix(null, null);
+      return `${prefix}${this.colorizeDiffLine(part, kind)}`;
+    }).join('\n');
+  },
+
   formatDiff(content) {
-    return String(content || '').split(/\r?\n/).map(line => {
-      const safe = this.escapeTags(line);
-      if (/^@@/.test(line)) return `{cyan-fg}${safe}{/cyan-fg}`;
-      if (/^\+\+\+|^---/.test(line)) return `{bold}${safe}{/bold}`;
-      if (/^\+/.test(line)) return `{green-fg}${safe}{/green-fg}`;
-      if (/^-/.test(line)) return `{red-fg}${safe}{/red-fg}`;
-      if (/^diff |^index |^commit /.test(line)) return `{yellow-fg}${safe}{/yellow-fg}`;
-      return safe;
+    const lines = String(content || '').split(/\r?\n/);
+    const hasHunk = lines.some(line => /^@@\s/.test(line));
+    if (!hasHunk) return lines.map(line => this.colorizeDiffLine(line)).join('\n');
+
+    let oldLine = 0;
+    let newLine = 0;
+    let inHunk = false;
+    return lines.map((line, index) => {
+      const hunk = line.match(/^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/);
+      if (hunk) {
+        oldLine = Number(hunk[1]);
+        newLine = Number(hunk[2]);
+        inHunk = true;
+        return this.formatDiffDisplayLine(line, null, null, 'hunk');
+      }
+      if (index === lines.length - 1 && line === '') {
+        return '';
+      }
+      if (!inHunk || /^diff |^index |^commit |^new file |^deleted file |^similarity |^rename |^Binary files |^\+\+\+|^---/.test(line)) {
+        return this.formatDiffDisplayLine(line, null, null);
+      }
+      if (/^\\ No newline at end of file/.test(line)) {
+        return this.formatDiffDisplayLine(line, null, null, 'dim');
+      }
+      if (/^\+/.test(line)) {
+        return this.formatDiffDisplayLine(line, null, newLine++, 'add');
+      }
+      if (/^-/.test(line)) {
+        return this.formatDiffDisplayLine(line, oldLine++, null, 'delete');
+      }
+      const contentLine = line.startsWith(' ') ? line : ` ${line}`;
+      return this.formatDiffDisplayLine(contentLine, oldLine++, newLine++, 'text');
     }).join('\n');
   }
 };

@@ -140,11 +140,12 @@ module.exports = {
 
   async showFileDiff(item, staged) {
     this.state.selected = item.file;
-    const diff = await this.git(staged ? ['diff', '--cached', '--', item.file] : ['diff', '--', item.file]).catch(error => `无法读取差异：${error.message}`);
-    this.detailPanel.setLabel(` 差异：${item.file} `);
-    this.detailPanel.setContent(this.formatDiff(diff || '没有可显示的文本差异。'));
-    this.detailPanel.setScroll(0);
-    this.screen.render();
+    const baseArgs = staged ? ['diff', '--cached'] : ['diff'];
+    await this.showDetailDiff({
+      label: ` 差异：${item.file} `,
+      collapsedArgs: [...baseArgs, '--', item.file],
+      expandedArgs: [...baseArgs, '--unified=999999', '--', item.file]
+    });
   },
 
   discardAllChanges() {
@@ -160,7 +161,7 @@ module.exports = {
     this.renderRepositories();
     this.renderChanges();
     this.renderHistory();
-    if (!this.state.selected) this.detailPanel.setContent(' 点击更改文件可查看工作区差异；点击提交可展开文件列表，再点击文件查看该提交的修改对比。');
+    if (!this.state.selected) this.setDetailText(null, ' 点击更改文件可查看工作区差异；点击提交可展开文件列表，再点击文件查看该提交的修改对比。');
     this.screen.render();
   }
 };

@@ -149,9 +149,7 @@ module.exports = {
 
   async showCommit(commit) {
     const detail = await this.git(['show', '--stat', '--patch', '--decorate=short', commit.hash]).catch(error => `无法读取提交：${error.message}`);
-    this.detailPanel.setLabel(` 提交：${commit.hash} `);
-    this.detailPanel.setContent(this.formatDiff(detail));
-    this.detailPanel.setScroll(0);
+    this.setDetailText(` 提交：${commit.hash} `, this.formatDiff(detail));
     this.screen.render();
   },
 
@@ -177,11 +175,11 @@ module.exports = {
   async showCommitFileDiff(commit, fileItem) {
     this.state.selected = `${commit.hash}:${fileItem.file}`;
     const paths = fileItem.oldFile ? [fileItem.oldFile, fileItem.file] : [fileItem.file];
-    const diff = await this.git(['show', '--format=', '--patch', '--find-renames', commit.hash, '--', ...paths]).catch(error => `无法读取差异：${error.message}`);
-    this.detailPanel.setLabel(` ${commit.hash}：${fileItem.file} `);
-    this.detailPanel.setContent(this.formatDiff(diff || '没有可显示的文本差异。'));
-    this.detailPanel.setScroll(0);
-    this.screen.render();
+    await this.showDetailDiff({
+      label: ` ${commit.hash}：${fileItem.file} `,
+      collapsedArgs: ['show', '--format=', '--patch', '--find-renames', commit.hash, '--', ...paths],
+      expandedArgs: ['show', '--format=', '--patch', '--find-renames', '--unified=999999', commit.hash, '--', ...paths]
+    });
   },
 
   async resolveCommitHash(commit) {

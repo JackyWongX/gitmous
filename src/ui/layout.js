@@ -40,11 +40,12 @@ function createLayout(app) {
   app.workPanel = blessed.box({ parent: app.leftPanel, left: 0, right: 0, mouse: true, border: app.regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
   app.changePanel = blessed.box({ parent: app.leftPanel, left: 0, right: 0, mouse: true, border: app.regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
   app.historyPanel = blessed.box({ parent: app.leftPanel, left: 0, right: 0, mouse: true, border: app.regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
-  app.detailPanel = app.box({ left: '42%', top: 0, right: 0, bottom: 0, border: app.regionBorder, label: ' 文件修改对比 ', scrollable: true, alwaysScroll: true, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+  app.detailPanel = app.box({ left: '42%', top: 0, right: 0, bottom: 0, border: app.regionBorder, label: ' 文件修改对比 ', scrollable: true, alwaysScroll: true, wrap: false, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.footer = blessed.box({ left: 0, bottom: 0, width: '100%', height: 2, tags: true, style: { fg: COLORS.dim, bg: '#111a28' }, content: ' 鼠标点击所有操作 · 提交消息可直接键盘输入 · 破坏性操作会要求确认' });
   screen.append(app.detailPanel);
   screen.append(app.leftPanel);
-  app.screenExitButton = app.button({ parent: screen, top: 0, right: 1, width: 6, height: 1, content: '退出', align: 'center', style: { fg: COLORS.text, bg: COLORS.panel, hover: { fg: COLORS.red, bg: COLORS.panelAlt } } });
+  app.detailToggleButton = app.button({ parent: screen, top: 0, right: 1, width: 8, height: 1, content: '展开', align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
+  app.detailToggleButton.hide();
 
   app.repoHeader = app.button({ parent: app.repoPanel, top: 0, left: 2, width: 10, height: 1, tags: true, content: ' ▾ 存储库 ' });
   app.repoAddButton = app.button({ parent: app.repoPanel, top: 0, right: 1, width: 3, height: 1, content: '+', style: app.iconStyle });
