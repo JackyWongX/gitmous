@@ -48,6 +48,20 @@ class GitUiApp {
     this.actionButton.on('press', () => this.actionMenu(this.actionButton));
     this.exitButton.on('press', () => { this.screen.destroy(); process.exit(0); });
     this.detailToggleButton.on('press', () => this.toggleDetailDiffView());
+    this.detailAbortMergeButton.on('press', () => this.abortMergeWithConfirm());
+    this.detailOursButton.on('press', () => {
+      if (this.detailDiffView && this.detailDiffView.file) this.resolveConflictWithConfirm(this.detailDiffView.file, 'ours');
+    });
+    this.detailTheirsButton.on('press', () => {
+      if (this.detailDiffView && this.detailDiffView.file) this.resolveConflictWithConfirm(this.detailDiffView.file, 'theirs');
+    });
+    this.detailResolvedButton.on('press', () => {
+      if (this.detailDiffView && this.detailDiffView.file) this.markConflictResolvedWithConfirm(this.detailDiffView.file);
+    });
+    this.bindTooltip(this.detailAbortMergeButton, () => this.t('abortMergeTooltip'));
+    this.bindTooltip(this.detailOursButton, () => this.t('acceptOursTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
+    this.bindTooltip(this.detailTheirsButton, () => this.t('acceptTheirsTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
+    this.bindTooltip(this.detailResolvedButton, () => this.t('markResolvedTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
     this.languageButton.on('press', () => this.languageMenu(this.languageButton));
     this.repoHeader.on('press', () => this.toggleSection('repositories'));
     this.commitHeader.on('press', () => this.toggleSection('commit'));

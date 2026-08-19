@@ -2,10 +2,15 @@
 
 module.exports = {
   statusMarker(code) {
+    if (this.isConflictStatusCode(code)) return { label: '!', tag: 'red-fg' };
     if (code === '??' || code.includes('A')) return { label: 'A', tag: 'green-fg' };
     if (code.includes('D')) return { label: 'D', tag: 'red-fg' };
     if (code.includes('R')) return { label: 'R', tag: 'magenta-fg' };
     return { label: 'M', tag: 'yellow-fg' };
+  },
+
+  isConflictStatusCode(code) {
+    return ['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(code);
   },
 
   isLiveRowState(rowState) {
@@ -54,15 +59,22 @@ module.exports = {
   addFileGroup(title, files, mode, top) {
     const folded = this.state.collapsed[mode];
     const staged = mode === 'staged';
+    const conflicted = mode === 'conflicted';
     const actionButtons = [];
     const rowStates = [];
-    const heading = this.button({ parent: this.changeContent, top, left: 0, right: staged ? 3 : 6, height: 1, shrink: false, tags: true, content: `${this.sectionCaption(folded, title)} {gray-fg}(${files.length}){/gray-fg}` });
+    const headingRight = conflicted ? 3 : (staged ? 3 : 6);
+    const heading = this.button({ parent: this.changeContent, top, left: 0, right: headingRight, height: 1, shrink: false, tags: true, content: `${this.sectionCaption(folded, title)} {gray-fg}(${files.length}){/gray-fg}` });
     heading.on('press', () => {
       this.state.collapsed[mode] = !this.state.collapsed[mode];
       this.renderChanges();
       this.screen.render();
     });
-    if (staged) {
+    if (conflicted) {
+      const abortMerge = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: 'x', style: this.iconStyle });
+      actionButtons.push(abortMerge);
+      this.bindTooltip(abortMerge, () => this.t('abortMergeTooltip'));
+      abortMerge.on('press', () => this.abortMergeWithConfirm());
+    } else if (staged) {
       const unstageAll = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
       actionButtons.push(unstageAll);
       this.bindTooltip(unstageAll, () => this.t('unstageAllTooltip'));
@@ -85,11 +97,23 @@ module.exports = {
       const marker = this.statusMarker(item.code);
       const rowBg = this.blessed.box({ parent: this.changeContent, top: row, left: 0, right: 0, height: 1, style: { bg: this.COLORS.panel } });
       const rowElements = [rowBg];
-      const main = this.button({ parent: this.changeContent, top: row, left: 2, right: staged ? 3 : 6, height: 1, shrink: false, padding: { left: 0, right: 0 }, tags: true, content: `{${marker.tag}}${marker.label}{/${marker.tag}}  ${this.escapeTags(item.file)}` });
+      const actionRight = conflicted ? 9 : (staged ? 3 : 6);
+      const main = this.button({ parent: this.changeContent, top: row, left: 2, right: actionRight, height: 1, shrink: false, padding: { left: 0, right: 0 }, tags: true, content: `{${marker.tag}}${marker.label}{/${marker.tag}}  ${this.escapeTags(item.file)}` });
       rowElements.push(main);
       this.bindTooltip(main, () => this.t('viewFileDiffTooltip', { file: item.file }));
       main.on('press', () => this.showFileDiff(item, staged));
-      if (staged) {
+      if (conflicted) {
+        const oursButton = this.button({ parent: this.changeContent, top: row, right: 6, width: 3, height: 1, shrink: false, content: 'O', style: this.iconStyle });
+        const theirsButton = this.button({ parent: this.changeContent, top: row, right: 3, width: 3, height: 1, shrink: false, content: 'T', style: this.iconStyle });
+        const resolvedButton = this.button({ parent: this.changeContent, top: row, right: 0, width: 3, height: 1, shrink: false, content: '✓', style: this.iconStyle });
+        rowElements.push(oursButton, theirsButton, resolvedButton);
+        this.bindTooltip(oursButton, () => this.t('acceptOursTooltip', { file: item.file }));
+        this.bindTooltip(theirsButton, () => this.t('acceptTheirsTooltip', { file: item.file }));
+        this.bindTooltip(resolvedButton, () => this.t('markResolvedTooltip', { file: item.file }));
+        oursButton.on('press', () => this.resolveConflictWithConfirm(item.file, 'ours'));
+        theirsButton.on('press', () => this.resolveConflictWithConfirm(item.file, 'theirs'));
+        resolvedButton.on('press', () => this.markConflictResolvedWithConfirm(item.file));
+      } else if (staged) {
         const unstageButton = this.button({ parent: this.changeContent, top: row, right: 0, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
         rowElements.push(unstageButton);
         this.bindTooltip(unstageButton, () => this.t('unstageFileTooltip', { file: item.file }));
@@ -115,6 +139,7 @@ module.exports = {
   renderChanges() {
     this.clearChildren(this.changeContent);
     let top = 0;
+    if (this.state.status.conflicted.length) top = this.addFileGroup(this.t('conflicts'), this.state.status.conflicted, 'conflicted', top);
     top = this.addFileGroup(this.t('stagedChanges'), this.state.status.staged, 'staged', top);
     top = this.addFileGroup(this.t('unstagedChanges'), [...this.state.status.unstaged, ...this.state.status.untracked], 'unstaged', top);
     if (top === 0) this.blessed.box({ parent: this.changeContent, top: 1, left: 1, content: `{green-fg}${this.t('workingTreeClean')}{/green-fg}`, tags: true });
@@ -142,10 +167,40 @@ module.exports = {
     this.state.selected = item.file;
     const baseArgs = staged ? ['diff', '--cached'] : ['diff'];
     await this.showDetailDiff({
+      file: item.file,
+      conflicted: this.isConflictStatusCode(item.code),
       label: () => this.t('diffLabel', { file: item.file }),
       collapsedArgs: [...baseArgs, '--', item.file],
       expandedArgs: [...baseArgs, '--unified=999999', '--', item.file]
     });
+  },
+
+  resolveConflictWithConfirm(file, side) {
+    const title = side === 'ours' ? this.t('acceptOurs') : this.t('acceptTheirs');
+    this.confirm(
+      title,
+      this.t(side === 'ours' ? 'acceptOursConfirm' : 'acceptTheirsConfirm', { file }),
+      () => this.perform(title, async () => {
+        await this.git(['checkout', side === 'ours' ? '--ours' : '--theirs', '--', file]);
+        await this.git(['add', '--', file]);
+      })
+    );
+  },
+
+  markConflictResolvedWithConfirm(file) {
+    this.confirm(
+      this.t('markResolved'),
+      this.t('markResolvedConfirm', { file }),
+      () => this.perform(this.t('markResolved'), () => this.git(['add', '--', file]))
+    );
+  },
+
+  abortMergeWithConfirm() {
+    this.confirm(
+      this.t('abortMerge'),
+      this.t('abortMergeConfirm'),
+      () => this.perform(this.t('abortMerge'), () => this.git(['merge', '--abort']))
+    );
   },
 
   discardAllChanges() {
@@ -158,6 +213,7 @@ module.exports = {
 
   renderAll() {
     this.updateCommitButton();
+    this.updateDetailConflictButtons();
     this.renderRepositories();
     this.renderChanges();
     this.renderHistory();

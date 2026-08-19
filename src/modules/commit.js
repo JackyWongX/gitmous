@@ -7,7 +7,7 @@ module.exports = {
   },
 
   hasAnyChanges() {
-    return this.state.status.staged.length > 0 || this.state.status.unstaged.length > 0 || this.state.status.untracked.length > 0;
+    return this.state.isMerging || this.state.status.staged.length > 0 || this.state.status.unstaged.length > 0 || this.state.status.untracked.length > 0 || this.state.status.conflicted.length > 0;
   },
 
   commitActionState() {
@@ -147,6 +147,58 @@ module.exports = {
     this.screen.render();
   },
 
+  async readMergeState() {
+    const mergeHeadRaw = await this.git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']).catch(() => '');
+    const mergeHeads = mergeHeadRaw.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (!mergeHeads.length) return { isMerging: false, message: '' };
+
+    const gitDirRaw = (await this.git(['rev-parse', '--git-dir']).catch(() => '')).trim();
+    const gitDir = this.path.isAbsolute(gitDirRaw) ? gitDirRaw : this.path.resolve(this.state.repo, gitDirRaw || '.git');
+    const mergeMessageFile = this.path.join(gitDir, 'MERGE_MSG');
+    let mergeMessage = '';
+    try {
+      mergeMessage = this.fs.readFileSync(mergeMessageFile, 'utf8')
+        .split(/\r?\n/)
+        .filter(line => !line.trim().startsWith('#'))
+        .join('\n')
+        .replace(/\s+$/g, '');
+    } catch (_) {
+      mergeMessage = '';
+    }
+
+    const incomingSubjects = [];
+    for (const hash of mergeHeads) {
+      const raw = await this.git(['log', '--reverse', '--format=%s', `HEAD..${hash}`]).catch(() => '');
+      raw.split(/\r?\n/).map(line => line.trim()).filter(Boolean).forEach(line => incomingSubjects.push(line));
+    }
+    const uniqueSubjects = [...new Set(incomingSubjects)];
+    if (uniqueSubjects.length) {
+      const incomingBlock = uniqueSubjects.map(subject => `- ${subject}`).join('\n');
+      mergeMessage = mergeMessage ? `${mergeMessage}\n\n${this.t('incomingCommitMessages')}\n${incomingBlock}` : incomingBlock;
+    }
+
+    return { isMerging: true, message: mergeMessage };
+  },
+
+  async syncMergeCommitMessage() {
+    const mergeState = await this.readMergeState();
+    this.state.isMerging = mergeState.isMerging;
+    if (!mergeState.isMerging || !mergeState.message) {
+      this.state.mergeMessageSource = '';
+      this.state.mergeMessageApplied = false;
+      return;
+    }
+    if (mergeState.message !== this.state.mergeMessageSource) {
+      this.state.mergeMessageSource = mergeState.message;
+      this.state.mergeMessageApplied = false;
+    }
+    if (!this.state.mergeMessageApplied && !this.commitInput.getValue().trim()) {
+      this.commitInput.setValue(mergeState.message);
+      this.state.mergeMessageApplied = true;
+      this.resizeCommitInput();
+    }
+  },
+
   toggleSection(section) {
     this.state.collapsed[section] = !this.state.collapsed[section];
     this.reflowLeftPanel();
@@ -181,10 +233,16 @@ module.exports = {
     }
     const message = this.commitInput.getValue().trim();
     if (!message) { this.toast(this.t('commitMessageRequired'), this.COLORS.yellow); this.focusCommitInput(); return; }
+    if (this.state.status.conflicted.length) {
+      this.toast(this.t('resolveConflictsFirst'), this.COLORS.yellow);
+      return;
+    }
     this.runUiAction(() => this.perform(this.t('commit'), async () => {
       if (!this.state.status.staged.length) await this.git(['add', '-A']);
       await this.git(['commit', '-m', message]);
       this.commitInput.clearValue();
+      this.state.mergeMessageSource = '';
+      this.state.mergeMessageApplied = false;
       this.resizeCommitInput();
     }), this.t('commit'));
   }

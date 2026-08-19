@@ -45,7 +45,7 @@ module.exports = {
   },
 
   parseStatus(raw) {
-    const result = { staged: [], unstaged: [], untracked: [] };
+    const result = { staged: [], unstaged: [], untracked: [], conflicted: [] };
     const records = raw ? raw.split('\0') : [];
     for (let index = 0; index < records.length; index += 1) {
       const record = records[index];
@@ -53,6 +53,10 @@ module.exports = {
       const code = record.slice(0, 2);
       const file = record.slice(3);
       const item = { file, code };
+      if (this.isConflictStatusCode(code)) {
+        result.conflicted.push(item);
+        continue;
+      }
       if (code === '??') result.untracked.push(item);
       else {
         if (code[0] !== ' ') result.staged.push(item);
@@ -76,12 +80,13 @@ module.exports = {
 
   async refreshRepo() {
     if (!this.state.repo) return;
-    const [statusRaw, branch, remote, remoteRefsRaw, head, history] = await Promise.all([
+    const [statusRaw, branch, remote, remoteRefsRaw, head, mergeHead, history] = await Promise.all([
       this.git(['status', '--porcelain=v1', '-z']),
       this.git(['branch', '--show-current']),
       this.git(['remote']).catch(() => ''),
       this.git(['for-each-ref', '--format=%(objectname)%09%(refname:short)', 'refs/remotes']).catch(() => ''),
       this.git(['rev-parse', 'HEAD']).catch(() => ''),
+      this.git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']).catch(() => ''),
       this.git(['log', '-n', '180', '--date=short', '--pretty=format:%H%x09%h%x09%ad%x09%an%x09%s']).catch(() => '')
     ]);
     this.state.status = this.parseStatus(statusRaw);
@@ -96,7 +101,7 @@ module.exports = {
       this.state.ahead = Number(counts[0]) || 0;
       this.state.behind = Number(counts[1]) || 0;
     }
-    this.state.repoSignature = this.repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, this.state.upstream, this.state.ahead, this.state.behind);
+    this.state.repoSignature = this.repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, mergeHead, this.state.upstream, this.state.ahead, this.state.behind);
     this.state.remoteRefs = new Map();
     remoteRefsRaw.split(/\r?\n/).filter(Boolean).forEach(line => {
       const [hash, name] = line.split('\t');
@@ -109,16 +114,18 @@ module.exports = {
       const [fullHash, hash, date, author, ...subjectParts] = line.split('\t');
       return { fullHash, hash, date, author, subject: subjectParts.join('\t') };
     }) : [];
+    await this.syncMergeCommitMessage();
     this.renderAll();
   },
 
-  repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, upstream, ahead, behind) {
+  repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, mergeHead, upstream, ahead, behind) {
     return [
       statusRaw || '',
       String(branch || '').trim(),
       remote || '',
       remoteRefsRaw || '',
       String(head || '').trim(),
+      String(mergeHead || '').trim(),
       upstream || '',
       ahead || 0,
       behind || 0
@@ -127,12 +134,13 @@ module.exports = {
 
   async readRepoSignature() {
     if (!this.state.repo) return '';
-    const [statusRaw, branch, remote, remoteRefsRaw, head] = await Promise.all([
+    const [statusRaw, branch, remote, remoteRefsRaw, head, mergeHead] = await Promise.all([
       this.git(['status', '--porcelain=v1', '-z']),
       this.git(['branch', '--show-current']),
       this.git(['remote']).catch(() => ''),
       this.git(['for-each-ref', '--format=%(objectname)%09%(refname:short)', 'refs/remotes']).catch(() => ''),
-      this.git(['rev-parse', 'HEAD']).catch(() => '')
+      this.git(['rev-parse', 'HEAD']).catch(() => ''),
+      this.git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']).catch(() => '')
     ]);
     const upstream = (await this.git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => '')).trim();
     let ahead = 0;
@@ -142,6 +150,6 @@ module.exports = {
       ahead = Number(counts[0]) || 0;
       behind = Number(counts[1]) || 0;
     }
-    return this.repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, upstream, ahead, behind);
+    return this.repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, mergeHead, upstream, ahead, behind);
   }
 };

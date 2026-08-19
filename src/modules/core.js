@@ -195,6 +195,7 @@ module.exports = {
     this.detailPanel.setLabel(this.t('detailPanel'));
     this.commitPlaceholder.setContent(this.t('commitPlaceholder'));
     this.updateDetailToggleButton();
+    this.updateDetailConflictButtons();
     this.reflowLeftPanel();
     this.renderAll();
     if (this.detailDiffView) this.showDetailDiff(this.detailDiffView).catch(error => this.toast(this.t('failed', { label: this.t('defaultAction'), message: error.message }), this.COLORS.red));
@@ -286,6 +287,7 @@ module.exports = {
   clearDetailDiffView() {
     this.detailDiffView = null;
     if (this.detailToggleButton) this.detailToggleButton.hide();
+    this.updateDetailConflictButtons();
   },
 
   setDetailText(label, content) {
@@ -305,11 +307,32 @@ module.exports = {
     this.detailToggleButton.show();
   },
 
+  updateDetailConflictButtons() {
+    const buttons = [
+      this.detailAbortMergeButton,
+      this.detailOursButton,
+      this.detailTheirsButton,
+      this.detailResolvedButton
+    ].filter(Boolean);
+    const file = this.detailDiffView && this.detailDiffView.file;
+    const visible = Boolean(
+      this.detailDiffView &&
+      this.detailDiffView.conflicted &&
+      file &&
+      this.state.status.conflicted.some(item => item.file === file)
+    );
+    buttons.forEach(button => {
+      if (visible) button.show();
+      else button.hide();
+    });
+  },
+
   async showDetailDiff(context, expanded = this.detailDiffExpanded) {
     if (typeof expanded === 'boolean') this.detailDiffExpanded = expanded;
     const nextContext = { ...context };
     this.detailDiffView = nextContext;
     this.updateDetailToggleButton();
+    this.updateDetailConflictButtons();
     const args = this.detailDiffExpanded ? nextContext.expandedArgs : nextContext.collapsedArgs;
     const diff = await this.git(args).catch(error => this.t('cannotReadDiff', { message: error.message }));
     const label = typeof nextContext.label === 'function' ? nextContext.label() : nextContext.label;
