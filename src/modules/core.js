@@ -266,6 +266,80 @@ module.exports = {
     this.screen.render();
   },
 
+  progressBarFrame(label) {
+    const screenWidth = this.screen.width || 80;
+    const labelWidth = this.textWidth(label);
+    const maxWidth = Math.max(20, screenWidth - 4);
+    const width = Math.min(maxWidth, Math.max(28, labelWidth + 8));
+    return { width, barWidth: Math.max(10, width - 4) };
+  },
+
+  showProgressBar(label) {
+    this.hideProgressBar();
+    const frame = this.progressBarFrame(label);
+    const root = this.blessed.box({
+      parent: this.screen,
+      top: 'center',
+      left: 'center',
+      width: frame.width,
+      height: 5,
+      tags: true,
+      mouse: true,
+      border: 'line',
+      style: { fg: this.COLORS.text, bg: this.COLORS.panel, border: { fg: this.COLORS.accent } }
+    });
+    this.blessed.box({
+      parent: root,
+      top: 1,
+      left: 2,
+      right: 2,
+      height: 1,
+      tags: true,
+      content: `{yellow-fg}${this.escapeTags(label)}{/yellow-fg}`,
+      style: { fg: this.COLORS.text, bg: this.COLORS.panel }
+    });
+    const track = this.blessed.box({
+      parent: root,
+      top: 3,
+      left: 2,
+      width: frame.barWidth,
+      height: 1,
+      content: ' '.repeat(frame.barWidth),
+      style: { bg: this.COLORS.panelAlt }
+    });
+    const fillWidth = Math.max(6, Math.min(14, Math.floor(frame.barWidth / 3)));
+    const fill = this.blessed.box({
+      parent: track,
+      top: 0,
+      left: 0,
+      width: fillWidth,
+      height: 1,
+      content: ' '.repeat(fillWidth),
+      style: { bg: this.COLORS.accent }
+    });
+    const progress = { root, track, fill, tick: 0, maxLeft: Math.max(0, frame.barWidth - fillWidth), timer: null };
+    const render = () => {
+      const period = Math.max(1, progress.maxLeft * 2);
+      const phase = progress.tick % period;
+      const left = phase <= progress.maxLeft ? phase : period - phase;
+      progress.fill.left = left;
+      progress.tick += 1;
+      this.screen.render();
+    };
+    progress.timer = setInterval(render, 120);
+    this.activeProgressBar = progress;
+    render();
+  },
+
+  hideProgressBar() {
+    const progress = this.activeProgressBar;
+    this.activeProgressBar = null;
+    if (!progress) return;
+    if (progress.timer) clearInterval(progress.timer);
+    this.destroyElement(progress.root);
+    this.screen.render();
+  },
+
   reportUnhandledError(error) {
     if (this.reportingUnhandledError) return;
     this.reportingUnhandledError = true;
@@ -367,6 +441,7 @@ module.exports = {
     if (this.state.busy) return undefined;
     try {
       this.setBusy(true, label);
+      if (options.progress) this.showProgressBar(label);
       const result = await operation();
       if (refresh) await this.refreshRepo();
       if (!options.silentSuccess) this.toast(this.t('completed', { label }), this.COLORS.green);
@@ -375,6 +450,7 @@ module.exports = {
       this.toast(this.t('failed', { label, message: error.message }), this.COLORS.red);
       return undefined;
     } finally {
+      if (options.progress) this.hideProgressBar();
       this.setBusy(false);
     }
   },

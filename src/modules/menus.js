@@ -17,33 +17,33 @@ module.exports = {
       this.inputDialog(this.t('publishBranch'), this.t('remoteUrlPlaceholder'), url => this.perform(this.t('publishBranch'), async () => {
         await this.git(['remote', 'add', 'origin', url]);
         await this.git(['push', '-u', 'origin', branch]);
-      }));
+      }, true, { progress: true }));
       return;
     }
     if (remotes.length === 1) {
-      await this.perform(this.t('publishBranch'), () => this.git(['push', '-u', remotes[0], branch]));
+      await this.perform(this.t('publishBranch'), () => this.git(['push', '-u', remotes[0], branch]), true, { progress: true });
       return;
     }
     this.showMenu(this.t('selectRemote'), remotes.map(remote => ({
       label: this.t('publishTo', { remote: this.escapeTags(remote), branch: this.escapeTags(branch) }),
-      action: () => this.perform(this.t('publishBranch'), () => this.git(['push', '-u', remote, branch]))
+      action: () => this.perform(this.t('publishBranch'), () => this.git(['push', '-u', remote, branch]), true, { progress: true })
     })), anchor);
   },
 
   async pushCurrentBranch() {
-    await this.perform(this.t('pushAction'), () => this.git(['push']));
+    await this.perform(this.t('pushAction'), () => this.git(['push']), true, { progress: true });
   },
 
   async pullCurrentBranch() {
-    await this.perform(this.t('pullAction'), () => this.git(['pull', '--no-rebase']));
+    await this.perform(this.t('pullAction'), () => this.git(['pull', '--no-rebase']), true, { progress: true });
   },
 
   networkMenu(anchor) {
     this.showMenu(this.t('networkActions'), [
-      { label: this.t('pullMenu'), action: () => this.perform(this.t('pullAction'), () => this.git(['pull', '--no-rebase'])) },
-      { label: this.t('pushMenu'), action: () => this.perform(this.t('pushAction'), () => this.git(['push'])) },
+      { label: this.t('pullMenu'), action: () => this.perform(this.t('pullAction'), () => this.git(['pull', '--no-rebase']), true, { progress: true }) },
+      { label: this.t('pushMenu'), action: () => this.perform(this.t('pushAction'), () => this.git(['push']), true, { progress: true }) },
       { label: this.t('fetchMenu'), action: () => this.perform(this.t('fetchAction'), () => this.git(['fetch', '--prune'])) },
-      { label: this.t('publishCurrentToOrigin'), action: () => this.perform(this.t('publishBranch'), () => this.git(['push', '-u', 'origin', this.state.branch])) }
+      { label: this.t('publishCurrentToOrigin'), action: () => this.perform(this.t('publishBranch'), () => this.git(['push', '-u', 'origin', this.state.branch]), true, { progress: true }) }
     ], anchor);
   },
 
