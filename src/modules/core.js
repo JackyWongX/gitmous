@@ -188,7 +188,7 @@ module.exports = {
 
   applyLanguage() {
     this.state.language = this.language;
-    this.header.setContent(` {bold}GitUI Mouse{/bold}  {gray-fg}${this.t('appSubtitle')}{/gray-fg}`);
+    this.header.setContent(` {bold}Gitmous{/bold}  {gray-fg}${this.t('appSubtitle')}{/gray-fg}`);
     this.refreshButton.setContent(this.t('refresh'));
     this.actionButton.setContent(this.t('actions'));
     this.exitButton.setContent(this.t('exit'));

@@ -10,7 +10,7 @@ const { createLayout } = require('./ui/layout');
 const { createTranslator } = require('./i18n');
 const { loadSettings, saveSettings } = require('./settings');
 
-class GitUiApp {
+class GitmousApp {
   constructor() {
     if (!process.env.TERM) process.env.TERM = 'xterm-256color';
 
@@ -140,7 +140,7 @@ class GitUiApp {
 }
 
 Object.assign(
-  GitUiApp.prototype,
+  GitmousApp.prototype,
   require('./modules/core'),
   require('./modules/git'),
   require('./modules/commit'),
@@ -150,4 +150,4 @@ Object.assign(
   require('./modules/menus')
 );
 
-module.exports = { GitUiApp };
+module.exports = { GitmousApp };

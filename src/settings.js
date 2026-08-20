@@ -23,7 +23,7 @@ function normalizeColorValue(value) {
 
 function settingsDirectory() {
   const base = process.env.APPDATA || path.join(os.homedir(), '.config');
-  return path.join(base, 'gitui-mouse');
+  return path.join(base, 'gitmous');
 }
 
 function settingsFilePath() {

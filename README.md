@@ -1,28 +1,106 @@
-# GitUI Mouse
+# Gitmous
 
-一个鼠标优先的终端 Git 管理器，复刻 VS Code 源码管理视图中最常用的工作流：查看变更、暂存、取消暂存、丢弃、提交、历史、拉取、推送、分支、合并、储藏、标签和远程仓库。
+**A Git client for completing everyday Git work in the terminal with mouse input, buttons, and menus.** Gitmous brings the workflow of a graphical source-control panel into the terminal: point, click, inspect, and confirm. No Git command memorization is required for everyday work.
 
-界面为左右双栏：左侧窄栏依次展示“存储库、提交、更改、图表”，右侧宽栏显示选中文件或提交的差异。所有左侧分组标题均可点击折叠或展开；每个分组右侧的 `...` 会打开对应的鼠标菜单。
+![Gitmous terminal interface](./show.png)
 
-## 启动
+English | [简体中文](./README.zh-CN.md)
 
-```powershell
-npm install
-npm start -- D:\github\your-repository
+## Work With Git In The Terminal
+
+Gitmous lets you complete everyday Git work in the terminal through mouse input, buttons, menus, and dialogs. Section headers, file controls, diffs, and conflict tools are clickable. Text values such as a commit message, branch name, or remote URL are entered in the application's input box, without manually typing Git or shell commands.
+
+`Ctrl+C` exits the application.
+
+## What You Can Do
+
+| Area | Actions Available In The Terminal |
+| --- | --- |
+| Repositories | Discover repositories under the current directory, add a local repository, initialize one, or clone from a remote URL. |
+| Changes | Click files to stage or unstage; inspect workspace diffs; stage all, unstage all, and discard one or all changes with confirmation. |
+| Commits | Create a commit, inspect commit metadata, browse files in a commit, copy hashes or messages, and reset to a selected commit. |
+| Branches | Create, switch, publish, merge, and delete local or remote branches. |
+| Remote work | Fetch, pull, push, publish the current branch, add or remove remotes, and inspect remote details. |
+| Stashes and tags | Create, apply, pop, inspect, or delete stashes; create and delete tags. |
+| Conflicts | Accept the current or incoming version, abort a merge, or mark a manually edited file as resolved. |
+| Appearance | Switch between English and Simplified Chinese and set the theme accent color. |
+
+Every action that can discard local work or rewrite history asks for confirmation before Git is invoked.
+
+## Platforms And Requirements
+
+Gitmous runs wherever Node.js and Git are available.
+
+- **macOS:** supported. Install Node.js and Git with Homebrew: `brew install node git`. Terminal and iTerm2 are suitable choices.
+- **Windows:** Windows Terminal is recommended. Install Node.js and Git, ensuring `git` is available on `PATH`.
+- **Linux:** install Node.js 18+ and Git through your distribution package manager.
+
+A terminal with mouse reporting support is required. Node.js 18 or later is supported.
+
+## Install From npm
+
+After the package is published, install it once and use it from any Git repository:
+
+```sh
+npm install --global gitmous
+gitmous /path/to/your-repository
 ```
 
-不传目录时，会使用当前目录并扫描其下两层的 Git 仓库。
+macOS example:
 
-应用已经启用终端鼠标追踪。所有命令均可点击完成；仅提交消息允许直接键盘输入。分支、标签和远程地址等需要文本的操作提供屏幕软键盘。
+```sh
+gitmous ~/Code/your-repository
+```
 
-## 操作说明
+Windows PowerShell example:
 
-- 点击“存储库、提交、更改、图表”标题可以折叠或展开该分组。
-- 点击每个标题右侧的 `...`，可打开仓库、Git 操作、批量更改或历史菜单。
-- 点击未暂存或已暂存文件即可切换其暂存状态。
-- 点击文件右侧的“查看”显示差异；“丢弃”会先要求确认。
-- 点击提交消息框输入消息，再点击“提交”。
-- 顶部“操作”菜单包含网络、分支、合并、储藏、标签、远程和撤销提交。
-- 任何有破坏性的操作都会弹出确认框。
+```powershell
+gitmous D:\github\your-repository
+```
 
-退出请点击顶部“退出”。
+You can also run it without a global installation:
+
+```sh
+npx gitmous /path/to/your-repository
+```
+
+When no path is provided, Gitmous uses the current directory and discovers Git repositories up to two levels below it.
+
+## First Use
+
+1. Launch the application in a repository or its parent directory.
+2. Select a repository in **Repositories**.
+3. Click a file under **Changes** to stage it, or use **View** to inspect its diff.
+4. Enter a message and click **Commit**.
+5. Use the top **Actions** menu for remote, branch, merge, stash, tag, and history operations.
+
+Click a section title to collapse or expand it. The `...` button beside a section title opens actions relevant to that panel.
+
+## Local Development
+
+```sh
+git clone https://github.com/JackyWongX/gitmous.git
+cd gitmous
+npm install
+npm start -- /path/to/your-repository
+npm run check
+```
+
+## Configuration
+
+Settings persist the selected language, accent color, and diff-panel preference. On Windows they are stored at `%APPDATA%\gitmous\settings.json`; on macOS and Linux they are stored at `~/.config/gitmous/settings.json`.
+
+## Safety And Privacy
+
+Gitmous runs Git commands only on your computer and does not upload repository contents to a third-party service. Review the repository, files, branch, and command details shown in a destructive-operation dialog before confirming.
+
+## Publish To npm
+
+This repository is configured as a public npm package through its `bin` field. Before the first release:
+
+```sh
+npm login
+npm publish --access public
+```
+
+For later releases, increment the version with `npm version patch`, `npm version minor`, or `npm version major` before publishing.

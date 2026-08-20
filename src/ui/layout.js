@@ -7,7 +7,7 @@ function createLayout(app) {
     smartCSR: true,
     fullUnicode: true,
     mouse: true,
-    title: 'GitUI Mouse',
+    title: 'Gitmous',
     dockBorders: true,
     autoPadding: false
   });
@@ -29,7 +29,7 @@ function createLayout(app) {
   app.header = blessed.box({
     top: 0, left: 0, height: 3, width: '100%',
     tags: true, mouse: true, style: { fg: COLORS.text, bg: '#111a28' },
-    content: ` {bold}GitUI Mouse{/bold}  {gray-fg}${app.t('appSubtitle')}{/gray-fg}`
+    content: ` {bold}Gitmous{/bold}  {gray-fg}${app.t('appSubtitle')}{/gray-fg}`
   });
   app.refreshButton = app.button({ parent: app.header, right: 33, top: 1, content: app.t('refresh') });
   app.actionButton = app.button({ parent: app.header, right: 22, top: 1, content: app.t('actions') });

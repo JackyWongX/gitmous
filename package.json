@@ -1,12 +1,38 @@
 {
-  "name": "gitui-mouse",
+  "name": "gitmous",
   "version": "1.0.0",
-  "private": true,
-  "description": "鼠标优先的终端 Git 管理器",
-  "main": "src/gitui.js",
+  "description": "Mouse-first terminal Git client",
+  "main": "src/gitmous.js",
+  "bin": {
+    "gitmous": "src/gitmous.js"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "README.zh-CN.md",
+    "show.png"
+  ],
+  "keywords": [
+    "git",
+    "terminal",
+    "tui",
+    "mouse",
+    "blessed"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JackyWongX/gitmous.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JackyWongX/gitmous/issues"
+  },
+  "homepage": "https://github.com/JackyWongX/gitmous#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
-    "start": "node src/gitui.js",
-    "check": "node --check src/gitui.js"
+    "start": "node src/gitmous.js",
+    "check": "node --check src/gitmous.js && node --check src/app.js && node --check src/i18n.js && node --check src/settings.js && node --check src/theme.js && node --check src/state.js && node --check src/ui/layout.js && node --check src/modules/core.js && node --check src/modules/git.js && node --check src/modules/commit.js && node --check src/modules/changes.js && node --check src/modules/history.js && node --check src/modules/menus.js && node --check src/modules/repositories.js"
   },
   "dependencies": {
     "blessed": "^0.1.81"
