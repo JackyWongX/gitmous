@@ -606,9 +606,10 @@ module.exports = {
   },
 
   showDiffLineToolbar(data, meta) {
+    const regionKey = meta.actionRegionKey || `line:${meta.displayLine}`;
     if (
       this.activeDiffLineToolbar &&
-      this.activeDiffLineToolbar.lineIndex === meta.displayLine &&
+      this.activeDiffLineToolbar.regionKey === regionKey &&
       this.activeDiffLineToolbar.file === this.detailDiffView.file
     ) return;
     this.hideDiffLineToolbar();
@@ -635,7 +636,7 @@ module.exports = {
     this.bindTooltip(discardButton, () => this.t(this.detailDiffView && this.detailDiffView.conflicted ? 'discardCurrentChangeTooltip' : 'discardDiffHunkTooltip'));
     acceptButton.on('press', () => this.acceptCurrentDiffChange(meta));
     discardButton.on('press', () => this.discardCurrentDiffChange(meta));
-    this.activeDiffLineToolbar = { root, lineIndex: meta.displayLine, file: this.detailDiffView.file };
+    this.activeDiffLineToolbar = { root, lineIndex: meta.displayLine, regionKey, file: this.detailDiffView.file };
     this.screen.render();
   },
 
@@ -985,6 +986,52 @@ module.exports = {
     return null;
   },
 
+  isConflictStartLine(line) {
+    return /^[ +\-]{0,2}<{7}/.test(String(line || ''));
+  },
+
+  isConflictEndLine(line) {
+    return /^[ +\-]{0,2}>{7}/.test(String(line || ''));
+  },
+
+  conflictRegionKey(lines, rawIndex) {
+    let start = -1;
+    for (let index = rawIndex; index >= 0; index -= 1) {
+      if (this.isConflictStartLine(lines[index])) {
+        start = index;
+        break;
+      }
+      if (index !== rawIndex && this.isConflictEndLine(lines[index])) break;
+    }
+    if (start < 0) return '';
+    let end = -1;
+    for (let index = rawIndex; index < lines.length; index += 1) {
+      if (this.isConflictEndLine(lines[index])) {
+        end = index;
+        break;
+      }
+      if (index !== rawIndex && this.isConflictStartLine(lines[index])) break;
+    }
+    return end >= start ? `conflict:${start}:${end}` : '';
+  },
+
+  hunkRegionKey(lines, rawIndex) {
+    for (let index = rawIndex; index >= 0; index -= 1) {
+      if (/^@@@?\s/.test(lines[index])) return `hunk:${index}`;
+      if (/^diff --git /.test(lines[index])) break;
+    }
+    return '';
+  },
+
+  assignDiffActionRegions(lines, meta) {
+    meta.forEach(item => {
+      if (!item.actionable || !Number.isInteger(item.rawIndex)) return;
+      item.actionRegionKey = this.conflictRegionKey(lines, item.rawIndex)
+        || this.hunkRegionKey(lines, item.rawIndex)
+        || `line:${item.displayLine}`;
+    });
+  },
+
   isActionableDiffKind(kind) {
     return ['add', 'delete', 'conflict'].includes(kind);
   },
@@ -1032,6 +1079,7 @@ module.exports = {
         });
         return this.colorizeDiffLine(line);
       });
+      this.assignDiffActionRegions(lines, meta);
       return { content: contentLines.join('\n'), meta };
     }
 
@@ -1077,6 +1125,7 @@ module.exports = {
       const contentLine = line.startsWith(' ') ? line : ` ${line}`;
       return this.formatDiffDisplayLine(contentLine, oldLine++, newLine++, this.conflictLineKind(contentLine) || 'text', meta, index);
     });
+    this.assignDiffActionRegions(lines, meta);
     return { content: contentLines.join('\n'), meta };
   }
 };
