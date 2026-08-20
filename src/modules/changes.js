@@ -222,7 +222,7 @@ module.exports = {
       async () => {
         await this.perform(title, async () => {
           await this.git(['checkout', side === 'ours' ? '--ours' : '--theirs', '--', file]);
-          await this.moveResolvedConflictToChanges(file);
+          await this.stageResolvedConflict(file);
         });
         await this.refreshCurrentFileDiff();
       }
@@ -234,7 +234,7 @@ module.exports = {
       this.t('markResolved'),
       this.t('markResolvedConfirm', { file }),
       async () => {
-        await this.perform(this.t('markResolved'), () => this.moveResolvedConflictToChanges(file));
+        await this.perform(this.t('markResolved'), () => this.stageResolvedConflict(file));
         await this.refreshCurrentFileDiff();
       }
     );
@@ -348,12 +348,11 @@ module.exports = {
     let nextText = nextLines.join(parsed.eol);
     if (parsed.hasFinalEol) nextText += parsed.eol;
     this.fs.writeFileSync(target, nextText, 'utf8');
-    if (!this.hasConflictMarkers(nextLines)) await this.moveResolvedConflictToChanges(file);
+    if (!this.hasConflictMarkers(nextLines)) await this.stageResolvedConflict(file);
   },
 
-  async moveResolvedConflictToChanges(file) {
+  async stageResolvedConflict(file) {
     await this.git(['add', '--', file]);
-    await this.git(['reset', 'HEAD', '--', file]);
   },
 
   conflictLineNumber(meta) {

@@ -347,7 +347,11 @@ module.exports = {
     this.detailPanel.setLabel(label);
     this.detailPanel.setContent(this.formatDiff(diff || this.t('noTextDiff')));
     this.renderConflictDiffToolbars();
-    this.detailPanel.setScroll(0);
+    const firstConflictToolbar = nextContext.conflicted
+      ? this.detailDiffConflictToolbarRows[0]
+      : null;
+    // 解决冲突后刷新时，自动跳到第一个剩余冲突块。
+    this.detailPanel.setScroll(firstConflictToolbar ? Math.max(0, firstConflictToolbar.displayLine - 1) : 0);
     this.screen.render();
   },
 
@@ -581,52 +585,38 @@ module.exports = {
   },
 
   renderConflictDiffToolbars() {
-    if (!this.detailDiffView || !this.detailDiffView.conflicted) return;
-    const rows = this.detailDiffConflictToolbarRows || [];
-    rows.forEach(row => {
-      const currentLabel = this.t('acceptOurs');
-      const incomingLabel = this.t('acceptTheirs');
-      const currentWidth = Math.max(6, this.textWidth(currentLabel) + 2);
-      const incomingWidth = Math.max(6, this.textWidth(incomingLabel) + 2);
-      const root = this.blessed.box({
-        parent: this.detailPanel,
-        top: row.displayLine,
-        left: 0,
-        right: 0,
-        height: 1,
-        mouse: true,
-        style: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt }
-      });
-      const currentButton = this.button({
-        parent: root,
-        top: 0,
-        left: 0,
-        width: currentWidth,
-        height: 1,
-        shrink: false,
-        padding: { left: 0, right: 0 },
-        content: currentLabel,
-        align: 'center',
-        style: { ...this.iconStyle, bg: this.COLORS.panelAlt }
-      });
-      const incomingButton = this.button({
-        parent: root,
-        top: 0,
-        left: currentWidth + 1,
-        width: incomingWidth,
-        height: 1,
-        shrink: false,
-        padding: { left: 0, right: 0 },
-        content: incomingLabel,
-        align: 'center',
-        style: { ...this.iconStyle, bg: this.COLORS.panelAlt }
-      });
-      this.bindTooltip(currentButton, () => this.t('acceptCurrentChangeTooltip'));
-      this.bindTooltip(incomingButton, () => this.t('discardCurrentChangeTooltip'));
-      currentButton.on('press', () => this.resolveConflictBlockWithConfirm(row.line, 'ours'));
-      incomingButton.on('press', () => this.resolveConflictBlockWithConfirm(row.line, 'theirs'));
-      this.detailDiffConflictToolbars.push({ root, row });
-    });
+    // 冲突块工具栏直接渲染在 diff 文本中，避免滚动内容里的子控件定位漂移。
+  },
+
+  detailContentColumnFromMouse(data) {
+    if (!this.detailPanel || !this.detailPanel.visible || !this.pointInside(this.detailPanel, data)) return -1;
+    let pos = null;
+    try {
+      pos = this.detailPanel.lpos || (typeof this.detailPanel._getCoords === 'function' ? this.detailPanel._getCoords() : null);
+    } catch (_) {
+      pos = null;
+    }
+    if (!pos || data.x <= pos.xi || data.x >= pos.xl - 1) return -1;
+    return data.x - pos.xi - 1;
+  },
+
+  conflictToolbarTargetFromMouse(data) {
+    if (!this.detailDiffView || !this.detailDiffView.conflicted) return null;
+    const lineIndex = this.detailContentLineFromMouse(data);
+    const column = this.detailContentColumnFromMouse(data);
+    if (lineIndex < 0 || column < 0) return null;
+    const row = (this.detailDiffConflictToolbarRows || []).find(item => item.displayLine === lineIndex);
+    if (!row || !Array.isArray(row.buttons)) return null;
+    const button = row.buttons.find(item => column >= item.left && column < item.left + item.width);
+    return button ? { row, side: button.side } : null;
+  },
+
+  handleDetailConflictToolbarMouse(data) {
+    if (!data || data.action !== 'mousedown') return;
+    const target = this.conflictToolbarTargetFromMouse(data);
+    if (!target) return;
+    this.hideDiffLineToolbar();
+    this.resolveConflictBlockWithConfirm(target.row.line, target.side);
   },
 
   detailContentLineFromMouse(data) {
@@ -1031,11 +1021,50 @@ module.exports = {
     return safe;
   },
 
+  ansiStyleText(value, style = {}) {
+    const codes = [];
+    if (style.bold) codes.push('1');
+    const fg = this.normalizeColorValue(style.fg);
+    const bg = this.normalizeColorValue(style.bg);
+    if (fg) codes.push(`38;2;${parseInt(fg.slice(1, 3), 16)};${parseInt(fg.slice(3, 5), 16)};${parseInt(fg.slice(5, 7), 16)}`);
+    if (bg) codes.push(`48;2;${parseInt(bg.slice(1, 3), 16)};${parseInt(bg.slice(3, 5), 16)};${parseInt(bg.slice(5, 7), 16)}`);
+    const prefix = codes.length ? `\x1b[${codes.join(';')}m` : '';
+    return `${prefix}${this.escapeTags(value)}\x1b[22;39;49m`;
+  },
+
+  conflictToolbarLine() {
+    const prefix = this.diffLineNumberPrefix(null, null);
+    const currentLabel = ` ${this.t('acceptOurs')} `;
+    const incomingLabel = ` ${this.t('acceptTheirs')} `;
+    const buttonStyle = { fg: '#ffffff', bg: '#0b6f9f', bold: true };
+    const rowStyle = { bg: '#12384a' };
+    const currentWidth = this.textWidth(currentLabel);
+    const gapWidth = 2;
+    const incomingWidth = this.textWidth(incomingLabel);
+    const bodyWidth = Math.max(0, this.diffBodyWidth());
+    const usedWidth = currentWidth + gapWidth + incomingWidth;
+    const tailWidth = Math.max(0, bodyWidth - usedWidth);
+    const body = [
+      this.ansiStyleText(currentLabel, buttonStyle),
+      this.ansiStyleText(' '.repeat(gapWidth), rowStyle),
+      this.ansiStyleText(incomingLabel, buttonStyle),
+      this.ansiStyleText(' '.repeat(tailWidth), rowStyle)
+    ].join('');
+    const buttonLeft = this.textWidth(prefix);
+    return {
+      content: `${prefix}${body}`,
+      buttons: [
+        { side: 'ours', left: buttonLeft, width: currentWidth },
+        { side: 'theirs', left: buttonLeft + currentWidth + gapWidth, width: incomingWidth }
+      ]
+    };
+  },
+
   conflictLineKind(line) {
-    if (/^[ +\-]{0,2}<{7}/.test(line)) return 'conflict';
-    if (/^[ +\-]{0,2}\|{7}/.test(line)) return 'conflict';
-    if (/^[ +\-]{0,2}={7}/.test(line)) return 'conflict';
-    if (/^[ +\-]{0,2}>{7}/.test(line)) return 'conflict';
+    if (/^[ +\-]*<{7}/.test(line)) return 'conflict';
+    if (/^[ +\-]*\|{7}/.test(line)) return 'conflict';
+    if (/^[ +\-]*={7}/.test(line)) return 'conflict';
+    if (/^[ +\-]*>{7}/.test(line)) return 'conflict';
     return null;
   },
 
@@ -1048,11 +1077,11 @@ module.exports = {
   },
 
   isConflictStartLine(line) {
-    return /^[ +\-]{0,2}<{7}/.test(String(line || ''));
+    return /^[ +\-]*<{7}/.test(String(line || ''));
   },
 
   isConflictEndLine(line) {
-    return /^[ +\-]{0,2}>{7}/.test(String(line || ''));
+    return /^[ +\-]*>{7}/.test(String(line || ''));
   },
 
   conflictRegionKey(lines, rawIndex) {
@@ -1128,6 +1157,7 @@ module.exports = {
     if (!this.detailDiffView || !this.detailDiffView.conflicted) {
       return { content: contentLines.join('\n'), meta, conflictToolbarRows: [] };
     }
+    const displayContentLines = contentLines.flatMap(line => String(line).split('\n'));
     const nextContentLines = [];
     const nextMeta = [];
     const conflictToolbarRows = [];
@@ -1137,8 +1167,19 @@ module.exports = {
       if (isConflictStart && item.rawIndex !== lastToolbarRawIndex) {
         const line = item.newLine || item.oldLine;
         if (line) {
-          conflictToolbarRows.push({ displayLine: nextMeta.length, line });
           nextContentLines.push('');
+          nextMeta.push({
+            displayLine: nextMeta.length,
+            rawLine: '',
+            rawIndex: null,
+            kind: 'conflictToolbarSpacing',
+            oldLine: null,
+            newLine: null,
+            actionable: false
+          });
+          const toolbar = this.conflictToolbarLine();
+          conflictToolbarRows.push({ displayLine: nextMeta.length, line, buttons: toolbar.buttons });
+          nextContentLines.push(toolbar.content);
           nextMeta.push({
             displayLine: nextMeta.length,
             rawLine: '',
@@ -1153,7 +1194,7 @@ module.exports = {
       }
       item.displayLine = nextMeta.length;
       nextMeta.push(item);
-      nextContentLines.push(contentLines[index]);
+      nextContentLines.push(displayContentLines[index] || '');
     });
     return { content: nextContentLines.join('\n'), meta: nextMeta, conflictToolbarRows };
   },

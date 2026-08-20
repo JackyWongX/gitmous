@@ -83,6 +83,7 @@ class GitUiApp {
     this.screen.on('mouse', data => this.activateCommitInputIfInside(data));
     this.screen.on('mouse', data => this.releaseCommitInputIfOutside(data));
     this.screen.on('mouse', data => this.handleScrollableWheel(data));
+    this.screen.on('mouse', data => this.handleDetailConflictToolbarMouse(data));
     this.screen.on('mouse', data => this.handleDetailDiffHover(data));
     this.screen.on('keypress', (ch, key) => this.handleCommitInputKey(ch, key));
     this.screen.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
