@@ -176,15 +176,42 @@ module.exports = {
     });
   },
 
+  async refreshCurrentFileDiff() {
+    const file = this.detailDiffView && this.detailDiffView.file;
+    if (!file) return;
+    const sameFile = item => item && item.file === file;
+    const conflicted = this.state.status.conflicted.find(sameFile);
+    if (conflicted) {
+      await this.showFileDiff(conflicted, false);
+      return;
+    }
+    const unstaged = this.state.status.unstaged.find(sameFile) || this.state.status.untracked.find(sameFile);
+    if (unstaged) {
+      await this.showFileDiff(unstaged, false);
+      return;
+    }
+    const staged = this.state.status.staged.find(sameFile);
+    if (staged) {
+      await this.showFileDiff(staged, true);
+      return;
+    }
+    this.state.selected = null;
+    this.setDetailText(null, this.t('helpDetail'));
+    this.screen.render();
+  },
+
   resolveConflictWithConfirm(file, side) {
     const title = side === 'ours' ? this.t('acceptOurs') : this.t('acceptTheirs');
     this.confirm(
       title,
       this.t(side === 'ours' ? 'acceptOursConfirm' : 'acceptTheirsConfirm', { file }),
-      () => this.perform(title, async () => {
-        await this.git(['checkout', side === 'ours' ? '--ours' : '--theirs', '--', file]);
-        await this.git(['add', '--', file]);
-      })
+      async () => {
+        await this.perform(title, async () => {
+          await this.git(['checkout', side === 'ours' ? '--ours' : '--theirs', '--', file]);
+          await this.git(['add', '--', file]);
+        });
+        await this.refreshCurrentFileDiff();
+      }
     );
   },
 
@@ -192,7 +219,10 @@ module.exports = {
     this.confirm(
       this.t('markResolved'),
       this.t('markResolvedConfirm', { file }),
-      () => this.perform(this.t('markResolved'), () => this.git(['add', '--', file]))
+      async () => {
+        await this.perform(this.t('markResolved'), () => this.git(['add', '--', file]));
+        await this.refreshCurrentFileDiff();
+      }
     );
   },
 
@@ -200,7 +230,12 @@ module.exports = {
     this.confirm(
       this.t('abortMerge'),
       this.t('abortMergeConfirm'),
-      () => this.perform(this.t('abortMerge'), () => this.git(['merge', '--abort']))
+      async () => {
+        await this.perform(this.t('abortMerge'), () => this.git(['merge', '--abort']));
+        this.state.selected = null;
+        this.setDetailText(null, this.t('helpDetail'));
+        this.screen.render();
+      }
     );
   },
 
@@ -229,12 +264,18 @@ module.exports = {
     const target = Number(lineNumber);
     if (!target || target < 1) return null;
     let start = -1;
+    let base = -1;
     let separator = -1;
     for (let index = 0; index < lines.length; index += 1) {
       const line = lines[index];
       if (line.startsWith('<<<<<<<')) {
         start = index;
+        base = -1;
         separator = -1;
+        continue;
+      }
+      if (start !== -1 && line.startsWith('|||||||')) {
+        base = index;
         continue;
       }
       if (start !== -1 && line.startsWith('=======')) {
@@ -245,11 +286,14 @@ module.exports = {
         const end = index;
         if (target >= start + 1 && target <= end + 1) {
           let section = 'marker';
-          if (target > start + 1 && target < separator + 1) section = 'ours';
+          const oursEnd = base !== -1 ? base : separator;
+          if (target > start + 1 && target < oursEnd + 1) section = 'ours';
+          else if (base !== -1 && target > base + 1 && target < separator + 1) section = 'base';
           else if (target > separator + 1 && target < end + 1) section = 'theirs';
-          return { start, separator, end, section };
+          return { start, base, separator, end, section };
         }
         start = -1;
+        base = -1;
         separator = -1;
       }
     }
@@ -257,10 +301,11 @@ module.exports = {
   },
 
   hasConflictMarkers(lines) {
-    return lines.some(line => line.startsWith('<<<<<<<') || line.startsWith('=======') || line.startsWith('>>>>>>>'));
+    return lines.some(line => line.startsWith('<<<<<<<') || line.startsWith('|||||||') || line.startsWith('=======') || line.startsWith('>>>>>>>'));
   },
 
   conflictChoiceSide(block, action) {
+    if (block.section === 'base') return null;
     if (action === 'acceptCurrent') return block.section === 'theirs' ? 'theirs' : 'ours';
     if (action === 'discardCurrent') return block.section === 'theirs' ? 'ours' : 'theirs';
     return action;
@@ -272,12 +317,14 @@ module.exports = {
     const parsed = this.splitTextPreserveEnd(text);
     const block = this.conflictBlockForLine(parsed.lines, lineNumber);
     if (!block) {
-      this.toast(this.t('noConflictBlockAtLine'), this.COLORS.yellow);
-      return;
+      throw new Error(this.t('noConflictBlockAtLine'));
     }
     const side = this.conflictChoiceSide(block, action);
+    if (!side) {
+      throw new Error(this.t('cannotChooseBaseConflict'));
+    }
     const selected = side === 'ours'
-      ? parsed.lines.slice(block.start + 1, block.separator)
+      ? parsed.lines.slice(block.start + 1, block.base !== -1 ? block.base : block.separator)
       : parsed.lines.slice(block.separator + 1, block.end);
     const nextLines = [
       ...parsed.lines.slice(0, block.start),
@@ -306,7 +353,10 @@ module.exports = {
     this.confirm(
       this.t('acceptCurrentChange'),
       this.t('acceptCurrentChangeConfirm', { file, line }),
-      () => this.perform(this.t('acceptCurrentChange'), () => this.applyConflictBlockChoice(file, line, 'acceptCurrent'))
+      async () => {
+        await this.perform(this.t('acceptCurrentChange'), () => this.applyConflictBlockChoice(file, line, 'acceptCurrent'));
+        await this.refreshCurrentFileDiff();
+      }
     );
   },
 
@@ -322,7 +372,10 @@ module.exports = {
     this.confirm(
       this.t('discardCurrentChange'),
       this.t('discardCurrentChangeConfirm', { file, line }),
-      () => this.perform(this.t('discardCurrentChange'), () => this.applyConflictBlockChoice(file, line, 'discardCurrent'))
+      async () => {
+        await this.perform(this.t('discardCurrentChange'), () => this.applyConflictBlockChoice(file, line, 'discardCurrent'));
+        await this.refreshCurrentFileDiff();
+      }
     );
   },
 
@@ -373,9 +426,7 @@ module.exports = {
   },
 
   async refreshDetailDiffAfterHunk() {
-    if (!this.detailDiffView) return;
-    const context = { ...this.detailDiffView };
-    await this.showDetailDiff(context).catch(error => this.toast(this.t('cannotReadDiff', { message: error.message }), this.COLORS.red));
+    await this.refreshCurrentFileDiff();
   },
 
   async stageCurrentDiffHunk(meta) {

@@ -971,6 +971,7 @@ module.exports = {
 
   conflictLineKind(line) {
     if (/^[ +\-]{0,2}<{7}/.test(line)) return 'conflict';
+    if (/^[ +\-]{0,2}\|{7}/.test(line)) return 'conflict';
     if (/^[ +\-]{0,2}={7}/.test(line)) return 'conflict';
     if (/^[ +\-]{0,2}>{7}/.test(line)) return 'conflict';
     return null;
