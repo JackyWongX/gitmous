@@ -114,7 +114,7 @@ module.exports = {
       `${this.t('date')}: ${data.date || this.t('unknown')}`
     ];
     if (isLatestCommit && this.state.branch && !this.isDetachedBranchName(this.state.branch)) lines.push(`${this.t('currentBranch')}: @${this.state.branch}`);
-    const remoteNames = remoteBranches.filter(name => name.includes('/'));
+    const remoteNames = this.remoteBranchesForDisplay(remoteBranches, isLatestCommit);
     if (remoteNames.length) lines.push(`${this.t('remoteBranch')}: ${remoteNames.join(', ')}`);
     if (data.refs) lines.push(`${this.t('refs')}: ${data.refs}`);
     lines.push('');
@@ -126,14 +126,28 @@ module.exports = {
   historyRightMarker(remoteBranches, isLatestCommit) {
     const parts = [];
     const branchName = this.latestBranchMarker(isLatestCommit);
-    if (branchName) parts.push(this.accentText(branchName));
-    const remoteMarker = this.remoteBranchMarker(remoteBranches);
+    if (branchName) parts.push(`{blue-fg}${this.escapeTags(branchName)}{/blue-fg}`);
+    const remoteMarker = this.remoteBranchMarker(remoteBranches, isLatestCommit);
     if (remoteMarker) parts.push(`{red-fg}${this.escapeTags(remoteMarker)}{/red-fg}`);
     return parts.join(' ');
   },
 
-  remoteBranchMarker(remoteBranches) {
+  remoteBranchesForDisplay(remoteBranches, isLatestCommit = false) {
     const branchNames = remoteBranches.filter(name => name.includes('/'));
+    if (!branchNames.length || !isLatestCommit) return branchNames;
+
+    const upstream = String(this.state.upstream || '').trim();
+    if (upstream && branchNames.includes(upstream)) return [upstream];
+
+    const branch = String(this.state.branch || '').trim();
+    if (!branch || this.isDetachedBranchName(branch)) return branchNames;
+
+    const currentBranchRemotes = branchNames.filter(name => name.endsWith(`/${branch}`));
+    return currentBranchRemotes.length ? currentBranchRemotes : branchNames;
+  },
+
+  remoteBranchMarker(remoteBranches, isLatestCommit = false) {
+    const branchNames = this.remoteBranchesForDisplay(remoteBranches, isLatestCommit);
     if (!branchNames.length) return '';
     const label = `☁  ${branchNames.join(', ')}`;
     return label.length > 30 ? `${label.slice(0, 29)}…` : label;
