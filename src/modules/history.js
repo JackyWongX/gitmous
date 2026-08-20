@@ -136,16 +136,16 @@ module.exports = {
     const branchNames = remoteBranches.filter(name => name.includes('/'));
     if (!branchNames.length) return branchNames;
 
-    const upstream = String(this.state.upstream || '').trim();
-    if (upstream && branchNames.includes(upstream)) return [upstream];
-
     const branch = String(this.state.branch || '').trim();
     if (!branch || this.isDetachedBranchName(branch)) return branchNames;
+
+    const upstream = String(this.state.upstream || '').trim();
+    if (upstream && branchNames.includes(upstream)) return [upstream];
 
     const currentBranchRemotes = branchNames.filter(name => name.endsWith(`/${branch}`));
     if (currentBranchRemotes.length) return currentBranchRemotes;
 
-    return branchNames;
+    return [];
   },
 
   remoteBranchMarker(remoteBranches, isLatestCommit = false) {

@@ -277,6 +277,7 @@ module.exports = {
   showProgressBar(label) {
     this.hideProgressBar();
     const frame = this.progressBarFrame(label);
+    const panelBg = this.COLORS.panel || '#101820';
     const root = this.blessed.box({
       parent: this.screen,
       top: 'center',
@@ -286,7 +287,7 @@ module.exports = {
       tags: true,
       mouse: true,
       border: 'line',
-      style: { fg: this.COLORS.text, bg: this.COLORS.panel, border: { fg: this.COLORS.accent } }
+      style: { fg: this.COLORS.text, bg: panelBg, border: { fg: this.COLORS.accent } }
     });
     this.blessed.box({
       parent: root,
@@ -296,7 +297,7 @@ module.exports = {
       height: 1,
       tags: true,
       content: `{yellow-fg}${this.escapeTags(label)}{/yellow-fg}`,
-      style: { fg: this.COLORS.text, bg: this.COLORS.panel }
+      style: { fg: this.COLORS.text, bg: panelBg }
     });
     const track = this.blessed.box({
       parent: root,
@@ -317,8 +318,9 @@ module.exports = {
       content: ' '.repeat(fillWidth),
       style: { bg: this.COLORS.accent }
     });
-    const progress = { root, track, fill, tick: 0, maxLeft: Math.max(0, frame.barWidth - fillWidth), timer: null };
+    const progress = { root, track, fill, tick: 0, maxLeft: Math.max(0, frame.barWidth - fillWidth), timer: null, startedAt: Date.now() };
     const render = () => {
+      this.bringProgressBarToFront();
       const period = Math.max(1, progress.maxLeft * 2);
       const phase = progress.tick % period;
       const left = phase <= progress.maxLeft ? phase : period - phase;
@@ -328,7 +330,17 @@ module.exports = {
     };
     progress.timer = setInterval(render, 120);
     this.activeProgressBar = progress;
+    this.bringProgressBarToFront();
     render();
+  },
+
+  bringProgressBarToFront() {
+    const progress = this.activeProgressBar;
+    if (progress && progress.root && typeof progress.root.setFront === 'function') progress.root.setFront();
+  },
+
+  async waitForUiRender() {
+    await new Promise(resolve => setImmediate(resolve));
   },
 
   hideProgressBar() {
@@ -338,6 +350,15 @@ module.exports = {
     if (progress.timer) clearInterval(progress.timer);
     this.destroyElement(progress.root);
     this.screen.render();
+  },
+
+  async hideProgressBarAfterMinimum(minimumMs = 0) {
+    const progress = this.activeProgressBar;
+    if (!progress) return;
+    const elapsed = Date.now() - (progress.startedAt || Date.now());
+    const remaining = Math.max(0, minimumMs - elapsed);
+    if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+    if (this.activeProgressBar === progress) this.hideProgressBar();
   },
 
   reportUnhandledError(error) {
@@ -441,7 +462,10 @@ module.exports = {
     if (this.state.busy) return undefined;
     try {
       this.setBusy(true, label);
-      if (options.progress) this.showProgressBar(label);
+      if (options.progress) {
+        this.showProgressBar(label);
+        await this.waitForUiRender();
+      }
       const result = await operation();
       if (refresh) await this.refreshRepo();
       if (!options.silentSuccess) this.toast(this.t('completed', { label }), this.COLORS.green);
@@ -450,7 +474,7 @@ module.exports = {
       this.toast(this.t('failed', { label, message: error.message }), this.COLORS.red);
       return undefined;
     } finally {
-      if (options.progress) this.hideProgressBar();
+      if (options.progress) await this.hideProgressBarAfterMinimum(options.progressMinimumMs || 700);
       this.setBusy(false);
     }
   },
