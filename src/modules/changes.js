@@ -222,6 +222,7 @@ module.exports = {
       async () => {
         await this.perform(title, async () => {
           await this.git(['checkout', side === 'ours' ? '--ours' : '--theirs', '--', file]);
+          await this.moveResolvedConflictToChanges(file);
         });
         await this.refreshCurrentFileDiff();
       }
@@ -233,7 +234,7 @@ module.exports = {
       this.t('markResolved'),
       this.t('markResolvedConfirm', { file }),
       async () => {
-        await this.perform(this.t('markResolved'), () => this.git(['add', '--', file]));
+        await this.perform(this.t('markResolved'), () => this.moveResolvedConflictToChanges(file));
         await this.refreshCurrentFileDiff();
       }
     );
@@ -347,10 +348,31 @@ module.exports = {
     let nextText = nextLines.join(parsed.eol);
     if (parsed.hasFinalEol) nextText += parsed.eol;
     this.fs.writeFileSync(target, nextText, 'utf8');
+    if (!this.hasConflictMarkers(nextLines)) await this.moveResolvedConflictToChanges(file);
+  },
+
+  async moveResolvedConflictToChanges(file) {
+    await this.git(['add', '--', file]);
+    await this.git(['reset', 'HEAD', '--', file]);
   },
 
   conflictLineNumber(meta) {
     return meta && (meta.newLine || meta.oldLine);
+  },
+
+  resolveConflictBlockWithConfirm(line, side) {
+    const file = this.detailDiffView && this.detailDiffView.file;
+    if (!file || !line) return;
+    const title = side === 'ours' ? this.t('acceptOurs') : this.t('acceptTheirs');
+    const confirmKey = side === 'ours' ? 'acceptCurrentConflictBlockConfirm' : 'acceptIncomingConflictBlockConfirm';
+    this.confirm(
+      title,
+      this.t(confirmKey, { file, line }),
+      async () => {
+        await this.perform(title, () => this.applyConflictBlockChoice(file, line, side));
+        await this.refreshCurrentFileDiff();
+      }
+    );
   },
 
   acceptCurrentDiffChange(meta) {

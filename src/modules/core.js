@@ -289,6 +289,7 @@ module.exports = {
     this.detailDiffView = null;
     this.detailDiffLineMeta = [];
     this.detailDiffRaw = '';
+    this.clearConflictDiffToolbars();
     this.hideDiffLineToolbar();
     if (this.detailToggleButton) this.detailToggleButton.hide();
     this.updateDetailConflictButtons();
@@ -341,9 +342,11 @@ module.exports = {
     const diff = await this.git(args).catch(error => this.t('cannotReadDiff', { message: error.message }));
     const label = typeof nextContext.label === 'function' ? nextContext.label() : nextContext.label;
     this.hideDiffLineToolbar();
+    this.clearConflictDiffToolbars();
     this.detailDiffRaw = diff || '';
     this.detailPanel.setLabel(label);
     this.detailPanel.setContent(this.formatDiff(diff || this.t('noTextDiff')));
+    this.renderConflictDiffToolbars();
     this.detailPanel.setScroll(0);
     this.screen.render();
   },
@@ -571,6 +574,61 @@ module.exports = {
     this.screen.render();
   },
 
+  clearConflictDiffToolbars() {
+    const toolbars = this.detailDiffConflictToolbars || [];
+    this.detailDiffConflictToolbars = [];
+    toolbars.forEach(toolbar => this.destroyElement(toolbar.root));
+  },
+
+  renderConflictDiffToolbars() {
+    if (!this.detailDiffView || !this.detailDiffView.conflicted) return;
+    const rows = this.detailDiffConflictToolbarRows || [];
+    rows.forEach(row => {
+      const currentLabel = this.t('acceptOurs');
+      const incomingLabel = this.t('acceptTheirs');
+      const currentWidth = Math.max(6, this.textWidth(currentLabel) + 2);
+      const incomingWidth = Math.max(6, this.textWidth(incomingLabel) + 2);
+      const root = this.blessed.box({
+        parent: this.detailPanel,
+        top: row.displayLine,
+        left: 0,
+        right: 0,
+        height: 1,
+        mouse: true,
+        style: { fg: this.COLORS.accent, bg: this.COLORS.panelAlt }
+      });
+      const currentButton = this.button({
+        parent: root,
+        top: 0,
+        left: 0,
+        width: currentWidth,
+        height: 1,
+        shrink: false,
+        padding: { left: 0, right: 0 },
+        content: currentLabel,
+        align: 'center',
+        style: { ...this.iconStyle, bg: this.COLORS.panelAlt }
+      });
+      const incomingButton = this.button({
+        parent: root,
+        top: 0,
+        left: currentWidth + 1,
+        width: incomingWidth,
+        height: 1,
+        shrink: false,
+        padding: { left: 0, right: 0 },
+        content: incomingLabel,
+        align: 'center',
+        style: { ...this.iconStyle, bg: this.COLORS.panelAlt }
+      });
+      this.bindTooltip(currentButton, () => this.t('acceptCurrentChangeTooltip'));
+      this.bindTooltip(incomingButton, () => this.t('discardCurrentChangeTooltip'));
+      currentButton.on('press', () => this.resolveConflictBlockWithConfirm(row.line, 'ours'));
+      incomingButton.on('press', () => this.resolveConflictBlockWithConfirm(row.line, 'theirs'));
+      this.detailDiffConflictToolbars.push({ root, row });
+    });
+  },
+
   detailContentLineFromMouse(data) {
     if (!this.detailPanel || !this.detailPanel.visible || !this.pointInside(this.detailPanel, data)) return -1;
     let pos = null;
@@ -586,10 +644,13 @@ module.exports = {
   handleDetailDiffHover(data) {
     if (!data || data.action !== 'mousemove') return;
     if (this.activeDiffLineToolbar && this.pointInside(this.activeDiffLineToolbar.root, data)) return;
+    if (this.detailDiffView && this.detailDiffView.conflicted) {
+      this.hideDiffLineToolbar();
+      return;
+    }
     const lineIndex = this.detailContentLineFromMouse(data);
     const meta = lineIndex >= 0 && this.detailDiffLineMeta ? this.detailDiffLineMeta[lineIndex] : null;
     const hasFile = Boolean(this.detailDiffView && this.detailDiffView.file);
-    const conflictAction = Boolean(hasFile && this.detailDiffView.conflicted && meta && meta.actionable && meta.newLine);
     const hunkAction = Boolean(
       hasFile &&
       !this.detailDiffView.conflicted &&
@@ -598,7 +659,7 @@ module.exports = {
       meta.actionable &&
       (meta.kind === 'add' || meta.kind === 'delete')
     );
-    if (!conflictAction && !hunkAction) {
+    if (!hunkAction) {
       this.hideDiffLineToolbar();
       return;
     }
@@ -1059,7 +1120,42 @@ module.exports = {
   formatDiff(content) {
     const result = this.formatDiffWithMeta(content);
     this.detailDiffLineMeta = result.meta;
+    this.detailDiffConflictToolbarRows = result.conflictToolbarRows;
     return result.content;
+  },
+
+  addConflictToolbarRows(contentLines, meta) {
+    if (!this.detailDiffView || !this.detailDiffView.conflicted) {
+      return { content: contentLines.join('\n'), meta, conflictToolbarRows: [] };
+    }
+    const nextContentLines = [];
+    const nextMeta = [];
+    const conflictToolbarRows = [];
+    let lastToolbarRawIndex = null;
+    meta.forEach((item, index) => {
+      const isConflictStart = this.isConflictStartLine(item.rawLine);
+      if (isConflictStart && item.rawIndex !== lastToolbarRawIndex) {
+        const line = item.newLine || item.oldLine;
+        if (line) {
+          conflictToolbarRows.push({ displayLine: nextMeta.length, line });
+          nextContentLines.push('');
+          nextMeta.push({
+            displayLine: nextMeta.length,
+            rawLine: '',
+            rawIndex: null,
+            kind: 'conflictToolbar',
+            oldLine: null,
+            newLine: null,
+            actionable: false
+          });
+        }
+        lastToolbarRawIndex = item.rawIndex;
+      }
+      item.displayLine = nextMeta.length;
+      nextMeta.push(item);
+      nextContentLines.push(contentLines[index]);
+    });
+    return { content: nextContentLines.join('\n'), meta: nextMeta, conflictToolbarRows };
   },
 
   formatDiffWithMeta(content) {
@@ -1080,7 +1176,7 @@ module.exports = {
         return this.colorizeDiffLine(line);
       });
       this.assignDiffActionRegions(lines, meta);
-      return { content: contentLines.join('\n'), meta };
+      return this.addConflictToolbarRows(contentLines, meta);
     }
 
     let oldLine = 0;
@@ -1126,6 +1222,6 @@ module.exports = {
       return this.formatDiffDisplayLine(contentLine, oldLine++, newLine++, this.conflictLineKind(contentLine) || 'text', meta, index);
     });
     this.assignDiffActionRegions(lines, meta);
-    return { content: contentLines.join('\n'), meta };
+    return this.addConflictToolbarRows(contentLines, meta);
   }
 };

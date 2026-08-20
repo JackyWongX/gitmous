@@ -36,6 +36,7 @@ class GitUiApp {
     this.autoRefreshRunning = false;
     this.commitInputActive = false;
     this.detailDiffView = null;
+    this.detailDiffConflictToolbars = [];
     this.detailDiffExpanded = loadedSettings.settings.detailDiffExpanded;
 
     createLayout(this);
