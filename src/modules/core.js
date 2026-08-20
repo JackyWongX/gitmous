@@ -1261,11 +1261,12 @@ module.exports = {
     const nextContentLines = [];
     const nextMeta = [];
     const conflictToolbarRows = [];
-    let lastToolbarRawIndex = null;
+    let lastToolbarKey = null;
     meta.forEach((item, index) => {
       const isConflictStart = this.isConflictStartLine(item.rawLine);
-      if (isConflictStart && item.rawIndex !== lastToolbarRawIndex) {
-        const line = item.newLine || item.oldLine;
+      const toolbarKey = Number.isInteger(item.rawIndex) ? `raw:${item.rawIndex}` : `display:${index}`;
+      if (isConflictStart && toolbarKey !== lastToolbarKey) {
+        const line = item.newLine || item.oldLine || (Number.isInteger(item.rawIndex) ? item.rawIndex + 1 : index + 1);
         if (line) {
           nextContentLines.push('');
           nextMeta.push({
@@ -1290,7 +1291,7 @@ module.exports = {
             actionable: false
           });
         }
-        lastToolbarRawIndex = item.rawIndex;
+        lastToolbarKey = toolbarKey;
       }
       item.displayLine = nextMeta.length;
       nextMeta.push(item);
