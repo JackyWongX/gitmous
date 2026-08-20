@@ -119,15 +119,25 @@ module.exports = {
     );
   },
 
-  deleteLocalBranchWithConfirm(branchName) {
+  async branchMergedStatus(refName) {
+    try {
+      await this.git(['merge-base', '--is-ancestor', refName, 'HEAD']);
+      return this.t('branchMergedYes');
+    } catch (_) {
+      return this.t('branchMergedNo');
+    }
+  },
+
+  async deleteLocalBranchWithConfirm(branchName) {
     if (branchName === this.state.branch) {
       this.toast(this.t('cannotDeleteCheckedOutBranch'), this.COLORS.yellow);
       return;
     }
+    const mergedStatus = await this.branchMergedStatus(branchName);
     this.confirm(
       this.t('deleteBranch'),
-      this.t('deleteBranchDetailConfirm', { name: branchName }),
-      () => this.perform(this.t('deleteBranch'), () => this.git(['branch', '-d', branchName]))
+      this.t('deleteBranchDetailConfirm', { name: branchName, mergedStatus }),
+      () => this.perform(this.t('deleteBranch'), () => this.git(['branch', '-D', branchName]))
     );
   },
 
@@ -150,15 +160,16 @@ module.exports = {
     return { remote: match[1], branch: match[2] };
   },
 
-  deleteRemoteBranchWithConfirm(remoteBranch) {
+  async deleteRemoteBranchWithConfirm(remoteBranch) {
     const parts = this.remoteBranchParts(remoteBranch);
     if (!parts) {
       this.toast(this.t('invalidRemoteBranchName', { name: remoteBranch }), this.COLORS.red);
       return;
     }
+    const mergedStatus = await this.branchMergedStatus(remoteBranch);
     this.confirm(
       this.t('deleteRemoteBranch'),
-      this.t('deleteRemoteBranchDetailConfirm', { remote: parts.remote, branch: parts.branch, name: remoteBranch }),
+      this.t('deleteRemoteBranchDetailConfirm', { remote: parts.remote, branch: parts.branch, name: remoteBranch, mergedStatus }),
       () => this.perform(this.t('deleteRemoteBranch'), () => this.git(['push', parts.remote, '--delete', parts.branch]))
     );
   },
@@ -217,7 +228,7 @@ module.exports = {
   },
 
   deleteBranchMenu(branches, anchor) {
-    const options = branches.filter(name => name !== this.state.branch).map(name => ({ label: `{red-fg}${this.t('delete')}{/red-fg} ${this.escapeTags(name)}`, action: () => this.confirm(this.t('deleteBranch'), this.t('deleteLocalBranchConfirm', { name }), () => this.perform(this.t('deleteBranch'), () => this.git(['branch', '-d', name]))) }));
+    const options = branches.filter(name => name !== this.state.branch).map(name => ({ label: `{red-fg}${this.t('delete')}{/red-fg} ${this.escapeTags(name)}`, action: () => this.deleteLocalBranchWithConfirm(name) }));
     this.showMenu(this.t('selectBranchToDelete'), options.length ? options : [{ label: this.t('noBranchToDelete'), action: () => {} }], anchor);
   },
 
