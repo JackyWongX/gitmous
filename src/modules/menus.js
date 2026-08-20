@@ -115,7 +115,7 @@ module.exports = {
     this.confirm(
       this.t('mergeBranch'),
       this.t('mergeBranchDetailConfirm', { source: sourceBranch, target: targetBranch }),
-      () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-edit', sourceBranch]))
+      () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-commit', '--no-ff', sourceBranch]))
     );
   },
 
@@ -140,7 +140,7 @@ module.exports = {
     this.confirm(
       this.t('mergeBranch'),
       this.t('mergeRemoteBranchDetailConfirm', { source: remoteBranch, target: targetBranch }),
-      () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-edit', remoteBranch]))
+      () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-commit', '--no-ff', remoteBranch]))
     );
   },
 
@@ -212,7 +212,7 @@ module.exports = {
   },
 
   mergeMenu(branches, anchor) {
-    const options = branches.filter(name => name !== this.state.branch).map(name => ({ label: this.t('mergeInto', { name: this.escapeTags(name), branch: this.escapeTags(this.state.branch) }), action: () => this.confirm(this.t('mergeBranch'), this.t('mergeConfirm', { name, branch: this.state.branch }), () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-edit', name]))) }));
+    const options = branches.filter(name => name !== this.state.branch).map(name => ({ label: this.t('mergeInto', { name: this.escapeTags(name), branch: this.escapeTags(this.state.branch) }), action: () => this.confirm(this.t('mergeBranch'), this.t('mergeConfirm', { name, branch: this.state.branch }), () => this.perform(this.t('mergeBranch'), () => this.git(['merge', '--no-commit', '--no-ff', name]))) }));
     this.showMenu(this.t('selectBranchToMerge'), options.length ? options : [{ label: this.t('noBranchToMerge'), action: () => {} }], anchor);
   },
 

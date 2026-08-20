@@ -44,7 +44,7 @@ function createLayout(app) {
   app.footer = blessed.box({ left: 0, bottom: 0, width: '100%', height: 2, tags: true, style: { fg: COLORS.dim, bg: '#111a28' }, content: app.t('footerIdle') });
   screen.append(app.detailPanel);
   screen.append(app.leftPanel);
-  app.detailAbortMergeButton = app.button({ parent: screen, top: 0, right: 23, width: 3, height: 1, shrink: false, content: 'x', align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
+  app.detailAbortMergeButton = app.button({ parent: screen, top: 0, right: 23, width: 3, height: 1, shrink: false, content: '-', align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
   app.detailOursButton = app.button({ parent: screen, top: 0, right: 20, width: 3, height: 1, shrink: false, content: 'O', align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
   app.detailTheirsButton = app.button({ parent: screen, top: 0, right: 17, width: 3, height: 1, shrink: false, content: 'T', align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
   app.detailResolvedButton = app.button({ parent: screen, top: 0, right: 14, width: 3, height: 1, shrink: false, content: '✓', align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });

@@ -56,10 +56,18 @@ module.exports = {
     });
   },
 
+  createAbortMergeButton(parent, top, right = 0) {
+    const abortMerge = this.button({ parent, top, right, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
+    this.bindTooltip(abortMerge, () => this.t('abortMergeTooltip'));
+    abortMerge.on('press', () => this.abortMergeWithConfirm());
+    return abortMerge;
+  },
+
   addFileGroup(title, files, mode, top) {
     const folded = this.state.collapsed[mode];
     const staged = mode === 'staged';
     const conflicted = mode === 'conflicted';
+    const merging = this.state.isMerging;
     const actionButtons = [];
     const rowStates = [];
     const headingRight = conflicted ? 3 : (staged ? 3 : 6);
@@ -70,22 +78,28 @@ module.exports = {
       this.screen.render();
     });
     if (conflicted) {
-      const abortMerge = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: 'x', style: this.iconStyle });
+      const abortMerge = this.createAbortMergeButton(this.changeContent, top);
       actionButtons.push(abortMerge);
-      this.bindTooltip(abortMerge, () => this.t('abortMergeTooltip'));
-      abortMerge.on('press', () => this.abortMergeWithConfirm());
     } else if (staged) {
-      const unstageAll = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
-      actionButtons.push(unstageAll);
-      this.bindTooltip(unstageAll, () => this.t('unstageAllTooltip'));
-      unstageAll.on('press', () => this.perform(this.t('unstageAll'), () => this.git(['reset', 'HEAD']).catch(() => this.git(['rm', '--cached', '-r', '--ignore-unmatch', '--', '.']))));
+      const rightButton = merging
+        ? this.createAbortMergeButton(this.changeContent, top)
+        : this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
+      actionButtons.push(rightButton);
+      if (!merging) {
+        this.bindTooltip(rightButton, () => this.t('unstageAllTooltip'));
+        rightButton.on('press', () => this.perform(this.t('unstageAll'), () => this.git(['reset', 'HEAD']).catch(() => this.git(['rm', '--cached', '-r', '--ignore-unmatch', '--', '.']))));
+      }
     } else {
-      const discardAll = this.button({ parent: this.changeContent, top, right: 3, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
+      const discardAll = merging
+        ? this.createAbortMergeButton(this.changeContent, top, 3)
+        : this.button({ parent: this.changeContent, top, right: 3, width: 3, height: 1, shrink: false, content: '-', style: this.iconStyle });
       const stageAll = this.button({ parent: this.changeContent, top, right: 0, width: 3, height: 1, shrink: false, content: '+', style: this.iconStyle });
       actionButtons.push(discardAll, stageAll);
-      this.bindTooltip(discardAll, () => this.t('discardAllTooltip'));
+      if (!merging) {
+        this.bindTooltip(discardAll, () => this.t('discardAllTooltip'));
+        discardAll.on('press', () => this.discardAllChanges());
+      }
       this.bindTooltip(stageAll, () => this.t('stageAllTooltip'));
-      discardAll.on('press', () => this.discardAllChanges());
       stageAll.on('press', () => this.perform(this.t('stageAllChanges'), () => this.git(['add', '-A'])));
     }
     if (folded) {
@@ -208,7 +222,6 @@ module.exports = {
       async () => {
         await this.perform(title, async () => {
           await this.git(['checkout', side === 'ours' ? '--ours' : '--theirs', '--', file]);
-          await this.git(['add', '--', file]);
         });
         await this.refreshCurrentFileDiff();
       }
@@ -334,7 +347,6 @@ module.exports = {
     let nextText = nextLines.join(parsed.eol);
     if (parsed.hasFinalEol) nextText += parsed.eol;
     this.fs.writeFileSync(target, nextText, 'utf8');
-    if (!this.hasConflictMarkers(nextLines)) await this.git(['add', '--', file]);
   },
 
   conflictLineNumber(meta) {
