@@ -132,9 +132,9 @@ module.exports = {
     return parts.join(' ');
   },
 
-  remoteBranchesForDisplay(remoteBranches, isLatestCommit = false) {
+  remoteBranchesForDisplay(remoteBranches) {
     const branchNames = remoteBranches.filter(name => name.includes('/'));
-    if (!branchNames.length || !isLatestCommit) return branchNames;
+    if (!branchNames.length) return branchNames;
 
     const upstream = String(this.state.upstream || '').trim();
     if (upstream && branchNames.includes(upstream)) return [upstream];
@@ -143,7 +143,9 @@ module.exports = {
     if (!branch || this.isDetachedBranchName(branch)) return branchNames;
 
     const currentBranchRemotes = branchNames.filter(name => name.endsWith(`/${branch}`));
-    return currentBranchRemotes.length ? currentBranchRemotes : branchNames;
+    if (currentBranchRemotes.length) return currentBranchRemotes;
+
+    return branchNames;
   },
 
   remoteBranchMarker(remoteBranches, isLatestCommit = false) {
