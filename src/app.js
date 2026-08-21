@@ -51,6 +51,7 @@ class GitmousApp {
     this.actionButton.on('press', () => this.actionMenu(this.actionButton));
     this.exitButton.on('press', () => { this.screen.destroy(); process.exit(0); });
     this.detailToggleButton.on('press', () => this.toggleDetailDiffView());
+    this.detailPanelCollapseButton.on('press', () => this.toggleDetailPanel());
     this.detailPanelExpandButton.on('press', () => this.toggleDetailPanel());
     this.detailAbortMergeButton.on('press', () => this.abortMergeWithConfirm());
     this.detailOursButton.on('press', () => {
@@ -66,12 +67,17 @@ class GitmousApp {
     this.bindTooltip(this.detailOursButton, () => this.t('acceptOursTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
     this.bindTooltip(this.detailTheirsButton, () => this.t('acceptTheirsTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
     this.bindTooltip(this.detailResolvedButton, () => this.t('markResolvedTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
+    this.bindTooltip(this.detailPanelCollapseButton, () => this.t('collapseDetailPanelTooltip'));
     this.bindTooltip(this.detailPanelExpandButton, () => this.t('expandDetailPanelTooltip'));
     this.languageButton.on('press', () => this.languageMenu(this.languageButton));
     this.repoHeader.on('press', () => this.toggleSection('repositories'));
+    this.repoCollapseButton.on('press', () => this.toggleSection('repositories'));
     this.commitHeader.on('press', () => this.toggleSection('commit'));
+    this.commitCollapseButton.on('press', () => this.toggleSection('commit'));
     this.changeHeader.on('press', () => this.toggleSection('changes'));
+    this.changeCollapseButton.on('press', () => this.toggleSection('changes'));
     this.historyHeader.on('press', () => this.toggleSection('history'));
+    this.historyCollapseButton.on('press', () => this.toggleSection('history'));
     this.commitInput.on('keypress', () => setImmediate(() => this.resizeCommitInputIfNeeded()));
     this.commitInput.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
     this.commitInput.on('focus', () => { this.updateCommitPlaceholder(); this.screen.render(); });

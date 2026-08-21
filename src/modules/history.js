@@ -10,15 +10,26 @@ module.exports = {
       const hasRemoteMarker = remoteBranches.length > 0;
       const rightMarker = this.historyRightMarker(remoteBranches, index === 0);
       const markerWidth = rightMarker ? Math.min(36, Math.max(3, this.textWidth(rightMarker) + 1)) : 0;
-      const commitButton = this.blessed.box({
+      const commitToggle = this.button({
         parent: this.historyContent,
         top: row,
         left: 0,
+        width: 3,
+        height: 1,
+        shrink: false,
+        content: expanded ? '▾' : '▸',
+        align: 'center',
+        style: this.iconStyle
+      });
+      const commitButton = this.blessed.box({
+        parent: this.historyContent,
+        top: row,
+        left: 3,
         right: markerWidth ? markerWidth + 1 : 0,
         height: 1,
         tags: true,
         mouse: true,
-        content: `${expanded ? '▾' : '▸'} ${this.accentText(commit.hash)} ${this.escapeTags(commit.subject)}`,
+        content: `${this.accentText(commit.hash)} ${this.escapeTags(commit.subject)}`,
         style: { fg: this.COLORS.text, bg: this.COLORS.panel, hover: { fg: this.COLORS.text, bg: this.COLORS.panelAlt } }
       });
       if (rightMarker) {
@@ -41,6 +52,7 @@ module.exports = {
         }
         this.toggleCommitFiles(commit);
       });
+      commitToggle.on('press', () => this.toggleCommitFiles(commit));
       this.bindTooltip(commitButton, () => this.commitTooltipText(commit, remoteBranches, index === 0), { delay: 300 });
       row += 1;
       if (!expanded) return;

@@ -71,12 +71,15 @@ module.exports = {
     const actionButtons = [];
     const rowStates = [];
     const headingRight = conflicted ? 3 : (staged ? 3 : 6);
-    const heading = this.button({ parent: this.changeContent, top, left: 0, right: headingRight, height: 1, shrink: false, tags: true, content: `${this.sectionCaption(folded, title)} {gray-fg}(${files.length}){/gray-fg}` });
-    heading.on('press', () => {
+    const headingToggle = this.button({ parent: this.changeContent, top, left: 0, width: 3, height: 1, shrink: false, content: folded ? '▸' : '▾', align: 'center', style: this.iconStyle });
+    const heading = this.button({ parent: this.changeContent, top, left: 3, right: headingRight, height: 1, shrink: false, tags: true, content: ` ${title} {gray-fg}(${files.length}){/gray-fg}`, style: this.sectionTitleStyle });
+    const toggleGroup = () => {
       this.state.collapsed[mode] = !this.state.collapsed[mode];
       this.renderChanges();
       this.screen.render();
-    });
+    };
+    heading.on('press', toggleGroup);
+    headingToggle.on('press', toggleGroup);
     if (conflicted) {
       const abortMerge = this.createAbortMergeButton(this.changeContent, top);
       actionButtons.push(abortMerge);

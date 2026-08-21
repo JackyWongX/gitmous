@@ -408,14 +408,7 @@ module.exports = {
 
   detailPanelTitle(label) {
     const title = String(label || this.t('detailPanel')).trim();
-    return ` ◀ ${title} `;
-  },
-
-  handleDetailPanelTitleClick(data) {
-    if (this.detailPanelCollapsed || !data || !this.detailPanel || !this.detailPanel.lpos) return;
-    const pos = this.detailPanel.lpos;
-    const clickedCollapseControl = data.y === pos.yi && data.x > pos.xi && data.x < pos.xi + 4;
-    if (clickedCollapseControl) this.toggleDetailPanel();
+    return `    ${title} `;
   },
 
   updateDetailPanelLayout() {
@@ -424,6 +417,7 @@ module.exports = {
     if (collapsed) {
       this.hideDiffLineToolbar();
       this.detailPanel.hide();
+      this.detailPanelCollapseButton.hide();
       this.detailPanelExpandButton.show();
       this.detailToggleButton.hide();
       [this.detailAbortMergeButton, this.detailOursButton, this.detailTheirsButton, this.detailResolvedButton]
@@ -431,6 +425,7 @@ module.exports = {
         .forEach(button => button.hide());
     } else {
       this.detailPanel.show();
+      this.detailPanelCollapseButton.show();
       this.detailPanelExpandButton.hide();
       this.updateDetailToggleButton();
       this.updateDetailConflictButtons();

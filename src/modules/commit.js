@@ -48,9 +48,10 @@ module.exports = {
   },
 
   updateSectionHeader(element, section, text) {
-    const content = ` ${this.sectionCaption(this.state.collapsed[section], text)} `;
+    const content = ` ${text} `;
     element.setContent(content);
     element.width = this.textWidth(content) + 2;
+    if (element.__collapseButton) element.__collapseButton.setContent(this.state.collapsed[section] ? '▸' : '▾');
   },
 
   updateCommitPlaceholder() {
