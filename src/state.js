@@ -7,6 +7,7 @@ function createState() {
     roots: [],
     repo: null,
     branch: '',
+    head: '',
     remote: '',
     remotes: [],
     upstream: '',

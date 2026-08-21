@@ -4,11 +4,12 @@ module.exports = {
   renderHistory() {
     this.clearChildren(this.historyContent);
     let row = 0;
-    this.state.history.forEach((commit, index) => {
+    this.state.history.forEach(commit => {
       const expanded = this.state.expandedHistory.has(commit.hash);
       const remoteBranches = this.state.remoteRefs.get(commit.fullHash) || [];
       const hasRemoteMarker = remoteBranches.length > 0;
-      const rightMarker = this.historyRightMarker(remoteBranches, index === 0);
+      const isCurrentBranchCommit = Boolean(this.state.head) && commit.fullHash === this.state.head;
+      const rightMarker = this.historyRightMarker(remoteBranches, isCurrentBranchCommit);
       const markerWidth = rightMarker ? Math.min(36, Math.max(3, this.textWidth(rightMarker) + 1)) : 0;
       const commitToggle = this.button({
         parent: this.historyContent,
@@ -53,7 +54,7 @@ module.exports = {
         this.toggleCommitFiles(commit);
       });
       commitToggle.on('press', () => this.toggleCommitFiles(commit));
-      this.bindTooltip(commitButton, () => this.commitTooltipText(commit, remoteBranches, index === 0), { delay: 300 });
+      this.bindTooltip(commitButton, () => this.commitTooltipText(commit, remoteBranches, isCurrentBranchCommit), { delay: 300 });
       row += 1;
       if (!expanded) return;
 
@@ -117,7 +118,7 @@ module.exports = {
     return data;
   },
 
-  async commitTooltipText(commit, remoteBranches, isLatestCommit) {
+  async commitTooltipText(commit, remoteBranches, isCurrentBranchCommit) {
     const data = await this.commitTooltipData(commit);
     const lines = [
       `${this.t('fullHash')}: ${data.fullHash || commit.fullHash || commit.hash}`,
@@ -125,8 +126,8 @@ module.exports = {
       `${this.t('author')}: ${data.email ? `${data.author} <${data.email}>` : (data.author || this.t('unknown'))}`,
       `${this.t('date')}: ${data.date || this.t('unknown')}`
     ];
-    if (isLatestCommit && this.state.branch && !this.isDetachedBranchName(this.state.branch)) lines.push(`${this.t('currentBranch')}: @${this.state.branch}`);
-    const remoteNames = this.remoteBranchesForDisplay(remoteBranches, isLatestCommit);
+    if (isCurrentBranchCommit && this.state.branch && !this.isDetachedBranchName(this.state.branch)) lines.push(`${this.t('currentBranch')}: @${this.state.branch}`);
+    const remoteNames = this.remoteBranchesForDisplay(remoteBranches);
     if (remoteNames.length) lines.push(`${this.t('remoteBranch')}: ${remoteNames.join(', ')}`);
     if (data.refs) lines.push(`${this.t('refs')}: ${data.refs}`);
     lines.push('');
@@ -135,11 +136,11 @@ module.exports = {
     return lines.join('\n');
   },
 
-  historyRightMarker(remoteBranches, isLatestCommit) {
+  historyRightMarker(remoteBranches, isCurrentBranchCommit) {
     const parts = [];
-    const branchName = this.latestBranchMarker(isLatestCommit);
+    const branchName = this.latestBranchMarker(isCurrentBranchCommit);
     if (branchName) parts.push(`{blue-fg}${this.escapeTags(branchName)}{/blue-fg}`);
-    const remoteMarker = this.remoteBranchMarker(remoteBranches, isLatestCommit);
+    const remoteMarker = this.remoteBranchMarker(remoteBranches);
     if (remoteMarker) parts.push(`{red-fg}${this.escapeTags(remoteMarker)}{/red-fg}`);
     return parts.join(' ');
   },

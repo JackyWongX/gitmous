@@ -78,30 +78,56 @@ module.exports = {
     }).filter(item => item.file);
   },
 
-  async refreshRepo() {
-    if (!this.state.repo) return;
-    const [statusRaw, branch, remote, remoteRefsRaw, head, mergeHead, history] = await Promise.all([
-      this.git(['status', '--porcelain=v1', '-z']),
-      this.git(['branch', '--show-current']),
-      this.git(['remote']).catch(() => ''),
-      this.git(['for-each-ref', '--format=%(objectname)%09%(refname:short)', 'refs/remotes']).catch(() => ''),
-      this.git(['rev-parse', 'HEAD']).catch(() => ''),
-      this.git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']).catch(() => ''),
-      this.git(['log', '-n', '180', '--date=short', '--pretty=format:%H%x09%h%x09%ad%x09%an%x09%s']).catch(() => '')
+  async refreshRemoteTrackingRefs(options = {}) {
+    const cwd = options.cwd || this.state.repo;
+    if (!cwd) return;
+    this.lastRemoteCheckAt = Date.now();
+    const upstream = (await this.git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { cwd }).catch(() => '')).trim();
+    if (!upstream) return;
+
+    const branch = (await this.git(['branch', '--show-current'], { cwd }).catch(() => '')).trim();
+    if (!branch) return;
+
+    const remote = (await this.git(['config', '--get', `branch.${branch}.remote`], { cwd }).catch(() => '')).trim();
+    if (!remote || remote === '.') return;
+
+    // 抓取失败时仍保留本地缓存状态，避免离线时无法打开仓库。
+    await this.git(['fetch', '--prune', remote], { cwd }).catch(() => '');
+  },
+
+  async refreshRepo(options = {}) {
+    const cwd = options.cwd || this.state.repo;
+    if (!cwd) return;
+    if (options.fetchRemote) await this.refreshRemoteTrackingRefs({ cwd });
+    const [statusRaw, branch, remote, remoteRefsRaw, head, mergeHead] = await Promise.all([
+      this.git(['status', '--porcelain=v1', '-z'], { cwd }),
+      this.git(['branch', '--show-current'], { cwd }),
+      this.git(['remote'], { cwd }).catch(() => ''),
+      this.git(['for-each-ref', '--format=%(objectname)%09%(refname:short)', 'refs/remotes'], { cwd }).catch(() => ''),
+      this.git(['rev-parse', 'HEAD'], { cwd }).catch(() => ''),
+      this.git(['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { cwd }).catch(() => '')
     ]);
+    const upstream = (await this.git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], { cwd }).catch(() => '')).trim();
+    let ahead = 0;
+    let behind = 0;
+    if (upstream) {
+      const counts = (await this.git(['rev-list', '--left-right', '--count', 'HEAD...@{u}'], { cwd }).catch(() => '0\t0')).trim().split(/\s+/);
+      ahead = Number(counts[0]) || 0;
+      behind = Number(counts[1]) || 0;
+    }
+    const historyArgs = ['log', '-n', '180', '--date=short', '--pretty=format:%H%x09%h%x09%ad%x09%an%x09%s', 'HEAD'];
+    if (upstream) historyArgs.push(upstream);
+    const history = await this.git(historyArgs, { cwd }).catch(() => '');
+    if (!this.samePath(cwd, this.state.repo)) return;
     this.state.status = this.parseStatus(statusRaw);
     this.state.branch = branch.trim() || this.t('detachedHead');
+    this.state.head = head.trim();
     this.state.remotes = remote.split(/\r?\n/).filter(Boolean);
     this.state.remote = this.state.remotes[0] || this.t('noRemote');
-    this.state.upstream = (await this.git(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => '')).trim();
-    this.state.ahead = 0;
-    this.state.behind = 0;
-    if (this.state.upstream) {
-      const counts = (await this.git(['rev-list', '--left-right', '--count', 'HEAD...@{u}']).catch(() => '0\t0')).trim().split(/\s+/);
-      this.state.ahead = Number(counts[0]) || 0;
-      this.state.behind = Number(counts[1]) || 0;
-    }
-    this.state.repoSignature = this.repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, mergeHead, this.state.upstream, this.state.ahead, this.state.behind);
+    this.state.upstream = upstream;
+    this.state.ahead = ahead;
+    this.state.behind = behind;
+    this.state.repoSignature = this.repoSignature(statusRaw, branch, remote, remoteRefsRaw, head, mergeHead, upstream, ahead, behind);
     this.state.remoteRefs = new Map();
     remoteRefsRaw.split(/\r?\n/).filter(Boolean).forEach(line => {
       const [hash, name] = line.split('\t');

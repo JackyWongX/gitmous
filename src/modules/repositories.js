@@ -76,10 +76,14 @@ module.exports = {
 
   async selectRepo(root, options = {}) {
     this.state.repo = this.path.resolve(root);
+    const selectedRepo = this.state.repo;
     this.state.selected = null;
     this.state.expandedHistory.clear();
     this.state.historyFiles.clear();
-    await this.perform(this.t('loadRepository'), () => this.refreshRepo(), false, options);
+    await this.perform(this.t('loadRepository'), () => this.refreshRepo({ cwd: selectedRepo }), false, options);
+    if (!this.samePath(selectedRepo, this.state.repo)) return;
+    // 首屏只读取本地信息；远端抓取完成后再增量刷新，不阻塞界面展示。
+    this.refreshRepo({ cwd: selectedRepo, fetchRemote: true }).catch(() => {});
   },
 
   async refreshRepositoryList() {

@@ -34,6 +34,7 @@ class GitmousApp {
     this.activeTooltipAnchor = null;
     this.autoRefreshTimer = null;
     this.autoRefreshRunning = false;
+    this.lastRemoteCheckAt = 0;
     this.commitInputActive = false;
     this.detailDiffView = null;
     this.detailDiffConflictToolbars = [];
@@ -47,7 +48,7 @@ class GitmousApp {
   }
 
   bindEvents() {
-    this.refreshButton.on('press', () => this.perform(this.t('refresh'), () => this.refreshRepo(), false));
+    this.refreshButton.on('press', () => this.perform(this.t('refresh'), () => this.refreshRepo({ fetchRemote: true }), false));
     this.actionButton.on('press', () => this.actionMenu(this.actionButton));
     this.exitButton.on('press', () => { this.screen.destroy(); process.exit(0); });
     this.detailToggleButton.on('press', () => this.toggleDetailDiffView());
@@ -159,6 +160,10 @@ class GitmousApp {
     if (!this.state.repo || this.state.busy || this.autoRefreshRunning) return;
     this.autoRefreshRunning = true;
     try {
+      if (Date.now() - this.lastRemoteCheckAt >= 60 * 1000) {
+        await this.refreshRepo({ fetchRemote: true });
+        return;
+      }
       const signature = await this.readRepoSignature();
       if (signature && signature !== this.state.repoSignature) {
         await this.refreshRepo();

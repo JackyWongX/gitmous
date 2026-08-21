@@ -14,7 +14,7 @@ module.exports = {
     if (this.state.status.staged.length > 0 || this.hasAnyChanges()) return { mode: 'commit', label: this.t('commitButton') };
     if (!this.state.repo) return { mode: 'none', label: this.t('commitButton') };
     if (!this.state.upstream) return { mode: 'publish', label: this.t('publishButton') };
-    if (this.state.behind > 0) return { mode: 'pull', label: this.t('pull') };
+    if (this.state.behind > 0) return { mode: 'pull', label: this.t('pull', { count: this.state.behind }) };
     if (this.state.ahead > 0) return { mode: 'push', label: this.t('push') };
     return { mode: 'commit', label: this.t('commitButton') };
   },
