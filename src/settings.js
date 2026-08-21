@@ -7,7 +7,8 @@ const path = require('path');
 const DEFAULT_SETTINGS = {
   language: 'en',
   themeColor: '#58b6e8',
-  detailDiffExpanded: false
+  detailDiffExpanded: false,
+  detailPanelCollapsed: false
 };
 
 function normalizeColorValue(value) {
@@ -35,7 +36,8 @@ function normalizeSettings(value) {
   const language = ['en', 'zh'].includes(source.language) ? source.language : DEFAULT_SETTINGS.language;
   const themeColor = normalizeColorValue(source.themeColor) || DEFAULT_SETTINGS.themeColor;
   const detailDiffExpanded = typeof source.detailDiffExpanded === 'boolean' ? source.detailDiffExpanded : DEFAULT_SETTINGS.detailDiffExpanded;
-  return { language, themeColor, detailDiffExpanded };
+  const detailPanelCollapsed = typeof source.detailPanelCollapsed === 'boolean' ? source.detailPanelCollapsed : DEFAULT_SETTINGS.detailPanelCollapsed;
+  return { language, themeColor, detailDiffExpanded, detailPanelCollapsed };
 }
 
 function loadSettings() {

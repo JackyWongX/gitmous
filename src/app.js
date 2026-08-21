@@ -38,9 +38,11 @@ class GitmousApp {
     this.detailDiffView = null;
     this.detailDiffConflictToolbars = [];
     this.detailDiffExpanded = loadedSettings.settings.detailDiffExpanded;
+    this.detailPanelCollapsed = loadedSettings.settings.detailPanelCollapsed;
 
     createLayout(this);
     this.bindEvents();
+    this.updateDetailPanelLayout();
     this.startAutoRefresh();
   }
 
@@ -49,6 +51,7 @@ class GitmousApp {
     this.actionButton.on('press', () => this.actionMenu(this.actionButton));
     this.exitButton.on('press', () => { this.screen.destroy(); process.exit(0); });
     this.detailToggleButton.on('press', () => this.toggleDetailDiffView());
+    this.detailPanelExpandButton.on('press', () => this.toggleDetailPanel());
     this.detailAbortMergeButton.on('press', () => this.abortMergeWithConfirm());
     this.detailOursButton.on('press', () => {
       if (this.detailDiffView && this.detailDiffView.file) this.resolveConflictWithConfirm(this.detailDiffView.file, 'ours');
@@ -63,6 +66,7 @@ class GitmousApp {
     this.bindTooltip(this.detailOursButton, () => this.t('acceptOursTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
     this.bindTooltip(this.detailTheirsButton, () => this.t('acceptTheirsTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
     this.bindTooltip(this.detailResolvedButton, () => this.t('markResolvedTooltip', { file: this.detailDiffView && this.detailDiffView.file ? this.detailDiffView.file : '' }));
+    this.bindTooltip(this.detailPanelExpandButton, () => this.t('expandDetailPanelTooltip'));
     this.languageButton.on('press', () => this.languageMenu(this.languageButton));
     this.repoHeader.on('press', () => this.toggleSection('repositories'));
     this.commitHeader.on('press', () => this.toggleSection('commit'));
@@ -89,6 +93,7 @@ class GitmousApp {
     this.screen.on('focus', () => this.restoreTerminalMouseTracking());
     this.screen.on('mouse', data => this.activateCommitInputIfInside(data));
     this.screen.on('mouse', data => this.releaseCommitInputIfOutside(data));
+    this.screen.on('mouse', data => this.collapseDetailPanelOnLeftBlank(data));
     this.screen.on('mouse', data => this.handleScrollableWheel(data));
     this.screen.on('mouse', data => this.handleDetailConflictToolbarMouse(data));
     this.screen.on('mouse', data => this.handleDetailDiffHover(data));

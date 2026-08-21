@@ -94,7 +94,8 @@ module.exports = {
       this.saveSettings({
         language: this.language,
         themeColor: this.COLORS.accent,
-        detailDiffExpanded: this.detailDiffExpanded
+        detailDiffExpanded: this.detailDiffExpanded,
+        detailPanelCollapsed: this.detailPanelCollapsed
       });
     } catch (error) {
       this.toast(this.t('settingsSaveFailed', { message: error.message }), this.COLORS.red);
@@ -193,11 +194,9 @@ module.exports = {
     this.actionButton.setContent(this.t('actions'));
     this.exitButton.setContent(this.t('exit'));
     this.languageButton.setContent(this.t('settings'));
-    this.detailPanel.setLabel(this.t('detailPanel'));
+    this.detailPanel.setLabel(this.detailPanelTitle(this.t('detailPanel')));
     this.commitPlaceholder.setContent(this.t('commitPlaceholder'));
-    this.updateDetailToggleButton();
-    this.updateDetailConflictButtons();
-    this.reflowLeftPanel();
+    this.updateDetailPanelLayout();
     this.renderAll();
     if (this.detailDiffView) this.showDetailDiff(this.detailDiffView).catch(error => this.toast(this.t('failed', { label: this.t('defaultAction'), message: error.message }), this.COLORS.red));
     this.screen.render();
@@ -369,7 +368,7 @@ module.exports = {
       const message = error && error.message ? error.message : String(error);
       this.state.busy = false;
       this.footer.setContent(` {red-fg}${this.escapeTags(this.t('operationError', { message }))}{/red-fg}`);
-      this.detailPanel.setLabel(this.t('programError'));
+      this.detailPanel.setLabel(this.detailPanelTitle(this.t('programError')));
       this.detailPanel.setContent(this.escapeTags(error && error.stack ? error.stack : message));
       this.screen.render();
     } catch (renderError) {
@@ -392,19 +391,84 @@ module.exports = {
 
   setDetailText(label, content) {
     this.clearDetailDiffView();
-    if (label) this.detailPanel.setLabel(label);
+    if (label) this.detailPanel.setLabel(this.detailPanelTitle(label));
     this.detailPanel.setContent(content);
     this.detailPanel.setScroll(0);
   },
 
   updateDetailToggleButton() {
     if (!this.detailToggleButton) return;
-    if (!this.detailDiffView) {
+    if (this.detailPanelCollapsed || !this.detailDiffView) {
       this.detailToggleButton.hide();
       return;
     }
     this.detailToggleButton.setContent(this.detailDiffExpanded ? this.t('collapse') : this.t('expand'));
     this.detailToggleButton.show();
+  },
+
+  detailPanelTitle(label) {
+    const title = String(label || this.t('detailPanel')).trim();
+    return ` ◀ ${title} `;
+  },
+
+  handleDetailPanelTitleClick(data) {
+    if (this.detailPanelCollapsed || !data || !this.detailPanel || !this.detailPanel.lpos) return;
+    const pos = this.detailPanel.lpos;
+    const clickedCollapseControl = data.y === pos.yi && data.x > pos.xi && data.x < pos.xi + 4;
+    if (clickedCollapseControl) this.toggleDetailPanel();
+  },
+
+  updateDetailPanelLayout() {
+    const collapsed = Boolean(this.detailPanelCollapsed);
+    this.leftPanel.width = collapsed ? '100%' : '42%';
+    if (collapsed) {
+      this.hideDiffLineToolbar();
+      this.detailPanel.hide();
+      this.detailPanelExpandButton.show();
+      this.detailToggleButton.hide();
+      [this.detailAbortMergeButton, this.detailOursButton, this.detailTheirsButton, this.detailResolvedButton]
+        .filter(Boolean)
+        .forEach(button => button.hide());
+    } else {
+      this.detailPanel.show();
+      this.detailPanelExpandButton.hide();
+      this.updateDetailToggleButton();
+      this.updateDetailConflictButtons();
+    }
+    this.reflowLeftPanel();
+  },
+
+  toggleDetailPanel() {
+    this.detailPanelCollapsed = !this.detailPanelCollapsed;
+    this.persistUserSettings();
+    this.updateDetailPanelLayout();
+    this.screen.render();
+  },
+
+  expandDetailPanelForFileDiff() {
+    if (!this.detailPanelCollapsed) return;
+    this.detailPanelCollapsed = false;
+    this.persistUserSettings();
+    this.updateDetailPanelLayout();
+  },
+
+  collapseDetailPanelOnLeftBlank(data) {
+    if (!data || data.action !== 'mousedown' || this.detailPanelCollapsed || !this.pointInside(this.leftPanel, data)) return;
+    const passiveTargets = [
+      this.leftPanel,
+      this.repoPanel,
+      this.workPanel,
+      this.changePanel,
+      this.historyPanel,
+      this.repoArea,
+      this.repoContent,
+      this.changeArea,
+      this.changeContent,
+      this.historyArea,
+      this.historyContent
+    ];
+    if (!passiveTargets.includes(this.screen.mouseDown)) return;
+    this.toggleDetailPanel();
   },
 
   updateDetailConflictButtons() {
@@ -416,6 +480,7 @@ module.exports = {
     ].filter(Boolean);
     const file = this.detailDiffView && this.detailDiffView.file;
     const visible = Boolean(
+      !this.detailPanelCollapsed &&
       this.detailDiffView &&
       this.detailDiffView.conflicted &&
       file &&
@@ -439,7 +504,7 @@ module.exports = {
     this.hideDiffLineToolbar();
     this.clearConflictDiffToolbars();
     this.detailDiffRaw = diff || '';
-    this.detailPanel.setLabel(label);
+    this.detailPanel.setLabel(this.detailPanelTitle(label));
     this.detailPanel.setContent(this.formatDiff(diff || this.t('noTextDiff')));
     this.renderConflictDiffToolbars();
     const firstConflictToolbar = nextContext.conflicted

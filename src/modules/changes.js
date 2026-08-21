@@ -178,6 +178,7 @@ module.exports = {
   },
 
   async showFileDiff(item, staged) {
+    this.expandDetailPanelForFileDiff();
     this.state.selected = item.file;
     const baseArgs = staged ? ['diff', '--cached'] : ['diff'];
     await this.showDetailDiff({

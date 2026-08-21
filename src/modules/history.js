@@ -189,6 +189,7 @@ module.exports = {
   },
 
   async showCommitFileDiff(commit, fileItem) {
+    this.expandDetailPanelForFileDiff();
     this.state.selected = `${commit.hash}:${fileItem.file}`;
     const paths = fileItem.oldFile ? [fileItem.oldFile, fileItem.file] : [fileItem.file];
     await this.showDetailDiff({

@@ -39,7 +39,7 @@ function createLayout(app) {
   app.workPanel = blessed.box({ parent: app.leftPanel, left: 0, right: 0, mouse: true, border: app.regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
   app.changePanel = blessed.box({ parent: app.leftPanel, left: 0, right: 0, mouse: true, border: app.regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
   app.historyPanel = blessed.box({ parent: app.leftPanel, left: 0, right: 0, mouse: true, border: app.regionBorder, style: { fg: COLORS.text, bg: COLORS.panel, border: { fg: COLORS.border } } });
-  app.detailPanel = app.box({ left: '42%', top: 0, right: 0, bottom: 0, border: app.regionBorder, label: app.t('detailPanel'), scrollable: true, alwaysScroll: true, wrap: false, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
+  app.detailPanel = app.box({ left: '42%', top: 0, right: 0, bottom: 0, border: app.regionBorder, label: app.detailPanelTitle(app.t('detailPanel')), scrollable: true, alwaysScroll: true, wrap: false, scrollbar: { ch: ' ', style: { bg: COLORS.accent } } });
   app.footer = blessed.box({ left: 0, bottom: 0, width: '100%', height: 2, tags: true, style: { fg: COLORS.dim, bg: '#111a28' }, content: app.t('footerIdle') });
   screen.append(app.detailPanel);
   screen.append(app.leftPanel);
@@ -53,7 +53,11 @@ function createLayout(app) {
   app.detailResolvedButton.hide();
   app.detailToggleButton = app.button({ parent: screen, top: 0, right: 5, width: 8, height: 1, content: app.t('expand'), align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
   app.detailToggleButton.hide();
+  app.detailPanelExpandButton = app.button({ parent: screen, top: 0, right: 5, width: 3, height: 1, shrink: false, content: '▶', align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
+  app.detailPanelExpandButton.hide();
   app.languageButton = app.button({ parent: screen, top: 0, right: 1, width: 4, height: 1, content: app.t('settings'), align: 'center', style: { fg: COLORS.accent, bg: COLORS.panel, hover: { fg: COLORS.accent, bg: COLORS.panelAlt } } });
+
+  app.detailPanel.on('click', data => app.handleDetailPanelTitleClick(data));
 
   app.repoHeader = app.button({ parent: app.repoPanel, top: 0, left: 2, width: 10, height: 1, tags: true, padding: { left: 0, right: 0 }, content: ` ▾ ${app.t('repositories')} ` });
   app.repoAddButton = app.button({ parent: app.repoPanel, top: 0, right: 1, width: 3, height: 1, content: '+', style: app.iconStyle });
