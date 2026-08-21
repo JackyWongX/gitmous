@@ -96,7 +96,10 @@ class GitmousApp {
       this.reflowLeftPanel();
       this.screen.render();
     });
-    this.screen.on('focus', () => this.restoreTerminalMouseTracking());
+    this.screen.on('focus', () => {
+      this.restoreTerminalMouseTracking();
+      this.refreshRemoteStatusOnFocus().catch(() => {});
+    });
     this.screen.on('mouse', data => this.activateCommitInputIfInside(data));
     this.screen.on('mouse', data => this.releaseCommitInputIfOutside(data));
     this.screen.on('mouse', data => this.collapseDetailPanelOnLeftBlank(data));
@@ -154,6 +157,17 @@ class GitmousApp {
       this.checkAutoRefresh().catch(() => {});
     }, 2000);
     if (typeof this.autoRefreshTimer.unref === 'function') this.autoRefreshTimer.unref();
+  }
+
+  async refreshRemoteStatusOnFocus() {
+    if (!this.state.repo || this.state.busy || this.autoRefreshRunning) return;
+    const cwd = this.state.repo;
+    this.autoRefreshRunning = true;
+    try {
+      await this.refreshRepo({ cwd, fetchRemote: true });
+    } finally {
+      this.autoRefreshRunning = false;
+    }
   }
 
   async checkAutoRefresh() {
