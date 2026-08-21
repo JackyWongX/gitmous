@@ -15,7 +15,7 @@ module.exports = {
     if (!this.state.repo) return { mode: 'none', label: this.t('commitButton') };
     if (!this.state.upstream) return { mode: 'publish', label: this.t('publishButton') };
     if (this.state.behind > 0) return { mode: 'pull', label: this.t('pull', { count: this.state.behind }) };
-    if (this.state.ahead > 0) return { mode: 'push', label: this.t('push') };
+    if (this.state.ahead > 0) return { mode: 'push', label: this.t('push', { count: this.state.ahead }) };
     return { mode: 'commit', label: this.t('commitButton') };
   },
 
