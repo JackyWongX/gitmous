@@ -295,6 +295,7 @@ module.exports = {
       right: 2,
       height: 1,
       tags: true,
+      align: 'center',
       content: `{yellow-fg}${this.escapeTags(label)}{/yellow-fg}`,
       style: { fg: this.COLORS.text, bg: panelBg }
     });

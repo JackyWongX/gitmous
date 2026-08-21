@@ -74,13 +74,7 @@ function createLayout(app) {
   app.commitCollapseButton = app.button({ parent: app.workPanel, top: 0, left: 2, width: 3, height: 1, shrink: false, content: '▾', align: 'center', style: app.iconStyle });
   app.commitHeader = app.button({ parent: app.workPanel, top: 0, left: 5, width: 8, height: 1, tags: true, padding: { left: 0, right: 0 }, content: ` ${app.t('commit')} `, style: app.sectionTitleStyle });
   app.commitHeader.__collapseButton = app.commitCollapseButton;
-  app.commitInput = blessed.textarea({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, inputOnFocus: true, keys: true, tags: false, style: { fg: COLORS.text, bg: COLORS.panel, focus: { fg: COLORS.text, bg: COLORS.panel } } });
-  const defaultCommitInputListener = app.commitInput._listener;
-  app.commitInput._listener = function keepImeInputActive(ch, key = {}) {
-    // 输入法切换会发送 Esc，不能将其当作取消提交消息输入。
-    if (key.name === 'escape') return;
-    return defaultCommitInputListener.call(this, ch, key);
-  };
+  app.commitInput = blessed.textarea({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, inputOnFocus: false, keys: false, tags: false, style: { fg: COLORS.text, bg: COLORS.panel, focus: { fg: COLORS.text, bg: COLORS.panel } } });
   app.commitPlaceholder = blessed.box({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, tags: false, content: app.t('commitPlaceholder'), style: { fg: COLORS.dim, bg: COLORS.panel } });
   app.commitButton = app.button({
     parent: app.workPanel,

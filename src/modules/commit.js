@@ -62,10 +62,10 @@ module.exports = {
   },
 
   focusCommitInput() {
+    this.commitInputActive = true;
     this.commitPlaceholder.hide();
     this.commitInput.focus();
-    if (!this.commitInput._reading) this.commitInput.readInput();
-    this.commitInputActive = Boolean(this.commitInput._reading);
+    this.screen.grabKeys = false;
     this.screen.program.showCursor();
     this.screen.render();
   },
@@ -78,6 +78,26 @@ module.exports = {
     if (!data || data.action !== 'mousedown' || this.state.collapsed.commit) return;
     if (!this.pointInsideCommitInput(data)) return;
     this.focusCommitInput();
+  },
+
+  trimLastCharacter(value) {
+    const chars = Array.from(String(value || ''));
+    chars.pop();
+    return chars.join('');
+  },
+
+  handleCommitInputKey(ch, key = {}) {
+    if (!this.commitInputActive || this.state.collapsed.commit) return;
+    if (key.ctrl || key.meta) return;
+    let value = this.commitInput.getValue();
+    if (key.name === 'backspace' || key.name === 'delete') value = this.trimLastCharacter(value);
+    else if (key.name === 'enter') value += '\n';
+    else if (key.name === 'return' || key.name === 'escape') return;
+    else if (ch && !/^[\x00-\x1f\x7f]$/.test(ch)) value += ch;
+    else return;
+    this.commitInput.setValue(value);
+    // 直接监听终端程序事件，避免输入法组合状态被 textarea 的编辑会话重置。
+    if (!this.resizeCommitInputIfNeeded()) this.screen.render();
   },
 
   reflowLeftPanel() {
@@ -129,8 +149,9 @@ module.exports = {
   },
 
   resizeCommitInputIfNeeded() {
-    if (this.state.collapsed.commit || this.commitInput.height === this.commitInputRows()) return;
+    if (this.state.collapsed.commit || this.commitInput.height === this.commitInputRows()) return false;
     this.resizeCommitInput();
+    return true;
   },
 
   async readMergeState() {
@@ -193,7 +214,6 @@ module.exports = {
 
   releaseCommitInputIfOutside(data) {
     if (!data || data.action !== 'mousedown' || this.pointInsideCommitInput(data)) return;
-    if (this.commitInput._reading) this.commitInput.cancel();
     this.commitInputActive = false;
     if (this.screen.focused === this.commitInput) {
       this.screen.rewindFocus();

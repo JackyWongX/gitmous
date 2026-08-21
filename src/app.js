@@ -78,7 +78,6 @@ class GitmousApp {
     this.changeCollapseButton.on('press', () => this.toggleSection('changes'));
     this.historyHeader.on('press', () => this.toggleSection('history'));
     this.historyCollapseButton.on('press', () => this.toggleSection('history'));
-    this.commitInput.on('keypress', () => setImmediate(() => this.resizeCommitInputIfNeeded()));
     this.commitInput.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
     this.commitInput.on('focus', () => { this.updateCommitPlaceholder(); this.screen.render(); });
     this.commitInput.on('blur', () => { this.updateCommitPlaceholder(); this.screen.render(); });
@@ -103,6 +102,7 @@ class GitmousApp {
     this.screen.on('mouse', data => this.handleScrollableWheel(data));
     this.screen.on('mouse', data => this.handleDetailConflictToolbarMouse(data));
     this.screen.on('mouse', data => this.handleDetailDiffHover(data));
+    this.screen.program.on('keypress', (ch, key) => this.handleCommitInputKey(ch, key));
     this.screen.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
     process.on('uncaughtException', error => this.reportUnhandledError(error));
     process.on('unhandledRejection', error => this.reportUnhandledError(error));
