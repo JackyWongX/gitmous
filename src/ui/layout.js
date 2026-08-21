@@ -7,6 +7,7 @@ function createLayout(app) {
     smartCSR: true,
     fullUnicode: true,
     mouse: true,
+    sendFocus: true,
     title: 'Gitmous',
     dockBorders: true,
     autoPadding: false
@@ -17,11 +18,9 @@ function createLayout(app) {
     return rawScreenRender();
   };
 
-  screen.program.setMouse({ vt200Mouse: true, sgrMouse: true, utfMouse: true, cellMotion: true }, true);
-  screen.enableMouse();
-  screen.program.hideCursor();
-
   app.screen = screen;
+  app.restoreTerminalMouseTracking();
+  screen.program.hideCursor();
   app.regionBorder = { type: 'line', fg: COLORS.border };
   app.iconStyle = { fg: COLORS.accent, bg: COLORS.panel, bold: true };
   app.fileRowHoverBg = COLORS.panelAlt;
@@ -62,7 +61,13 @@ function createLayout(app) {
   app.repoContent = blessed.box({ parent: app.repoArea, top: 0, left: 0, right: 0, height: 1, mouse: true, style: { fg: COLORS.text, bg: COLORS.panel } });
 
   app.commitHeader = app.button({ parent: app.workPanel, top: 0, left: 2, width: 8, height: 1, tags: true, padding: { left: 0, right: 0 }, content: ` ▾ ${app.t('commit')} ` });
-  app.commitInput = blessed.textarea({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, inputOnFocus: false, keys: false, tags: false, style: { fg: COLORS.text, bg: COLORS.panel, focus: { fg: COLORS.text, bg: COLORS.panel } } });
+  app.commitInput = blessed.textarea({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, inputOnFocus: true, keys: true, tags: false, style: { fg: COLORS.text, bg: COLORS.panel, focus: { fg: COLORS.text, bg: COLORS.panel } } });
+  const defaultCommitInputListener = app.commitInput._listener;
+  app.commitInput._listener = function keepImeInputActive(ch, key = {}) {
+    // 输入法切换会发送 Esc，不能将其当作取消提交消息输入。
+    if (key.name === 'escape') return;
+    return defaultCommitInputListener.call(this, ch, key);
+  };
   app.commitPlaceholder = blessed.box({ parent: app.workPanel, top: 1, left: 2, right: 8, height: 1, mouse: true, tags: false, content: app.t('commitPlaceholder'), style: { fg: COLORS.dim, bg: COLORS.panel } });
   app.commitButton = app.button({
     parent: app.workPanel,

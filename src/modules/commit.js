@@ -61,10 +61,10 @@ module.exports = {
   },
 
   focusCommitInput() {
-    this.commitInputActive = true;
     this.commitPlaceholder.hide();
     this.commitInput.focus();
-    this.screen.grabKeys = false;
+    if (!this.commitInput._reading) this.commitInput.readInput();
+    this.commitInputActive = Boolean(this.commitInput._reading);
     this.screen.program.showCursor();
     this.screen.render();
   },
@@ -77,26 +77,6 @@ module.exports = {
     if (!data || data.action !== 'mousedown' || this.state.collapsed.commit) return;
     if (!this.pointInsideCommitInput(data)) return;
     this.focusCommitInput();
-  },
-
-  trimLastCharacter(value) {
-    const chars = Array.from(String(value || ''));
-    chars.pop();
-    return chars.join('');
-  },
-
-  handleCommitInputKey(ch, key = {}) {
-    if (!this.commitInputActive || this.state.collapsed.commit) return;
-    if (key.ctrl && key.name === 'c') return;
-    let value = this.commitInput.getValue();
-    if (key.name === 'backspace') value = this.trimLastCharacter(value);
-    else if (key.name === 'delete') value = this.trimLastCharacter(value);
-    else if (key.name === 'enter') value += '\n';
-    else if (key.name === 'return') return;
-    else if (ch && !key.ctrl && !key.meta) value += ch;
-    else return;
-    this.commitInput.setValue(value);
-    this.resizeCommitInput();
   },
 
   reflowLeftPanel() {
@@ -145,6 +125,11 @@ module.exports = {
     this.reflowLeftPanel();
     this.syncCommitInputScroll();
     this.screen.render();
+  },
+
+  resizeCommitInputIfNeeded() {
+    if (this.state.collapsed.commit || this.commitInput.height === this.commitInputRows()) return;
+    this.resizeCommitInput();
   },
 
   async readMergeState() {
@@ -207,6 +192,7 @@ module.exports = {
 
   releaseCommitInputIfOutside(data) {
     if (!data || data.action !== 'mousedown' || this.pointInsideCommitInput(data)) return;
+    if (this.commitInput._reading) this.commitInput.cancel();
     this.commitInputActive = false;
     if (this.screen.focused === this.commitInput) {
       this.screen.rewindFocus();

@@ -68,7 +68,8 @@ class GitmousApp {
     this.commitHeader.on('press', () => this.toggleSection('commit'));
     this.changeHeader.on('press', () => this.toggleSection('changes'));
     this.historyHeader.on('press', () => this.toggleSection('history'));
-    this.commitInput.on('keypress', () => setImmediate(() => this.resizeCommitInput()));
+    this.commitInput.on('keypress', () => setImmediate(() => this.resizeCommitInputIfNeeded()));
+    this.commitInput.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
     this.commitInput.on('focus', () => { this.updateCommitPlaceholder(); this.screen.render(); });
     this.commitInput.on('blur', () => { this.updateCommitPlaceholder(); this.screen.render(); });
     this.repoAddButton.on('press', () => this.inputDialog(this.t('addRepository'), this.t('repoPathPlaceholder'), async directory => {
@@ -79,16 +80,34 @@ class GitmousApp {
     }));
     this.commitButton.on('press', () => this.handleCommitButton());
 
-    this.screen.on('resize', () => { this.reflowLeftPanel(); this.screen.render(); });
+    this.screen.on('resize', () => {
+      // Codex 重新挂载侧边栏终端时会清除终端侧的鼠标模式。
+      this.restoreTerminalMouseTracking();
+      this.reflowLeftPanel();
+      this.screen.render();
+    });
+    this.screen.on('focus', () => this.restoreTerminalMouseTracking());
     this.screen.on('mouse', data => this.activateCommitInputIfInside(data));
     this.screen.on('mouse', data => this.releaseCommitInputIfOutside(data));
     this.screen.on('mouse', data => this.handleScrollableWheel(data));
     this.screen.on('mouse', data => this.handleDetailConflictToolbarMouse(data));
     this.screen.on('mouse', data => this.handleDetailDiffHover(data));
-    this.screen.on('keypress', (ch, key) => this.handleCommitInputKey(ch, key));
     this.screen.key(['C-c'], () => { this.screen.destroy(); process.exit(0); });
     process.on('uncaughtException', error => this.reportUnhandledError(error));
     process.on('unhandledRejection', error => this.reportUnhandledError(error));
+  }
+
+  restoreTerminalMouseTracking() {
+    const program = this.screen && this.screen.program;
+    if (!program) return;
+    program.setMouse({
+      vt200Mouse: true,
+      sgrMouse: true,
+      utfMouse: true,
+      cellMotion: true,
+      sendFocus: true
+    }, true);
+    this.screen.enableMouse();
   }
 
   async bootstrap() {
