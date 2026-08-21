@@ -62,7 +62,9 @@ module.exports = {
   },
 
   focusCommitInput() {
+    const wasActive = this.commitInputActive;
     this.commitInputActive = true;
+    if (!wasActive) this.commitInputCursor = Array.from(this.commitInput.getValue()).length;
     this.commitPlaceholder.hide();
     this.commitInput.focus();
     this.screen.grabKeys = false;
@@ -80,24 +82,62 @@ module.exports = {
     this.focusCommitInput();
   },
 
-  trimLastCharacter(value) {
-    const chars = Array.from(String(value || ''));
-    chars.pop();
-    return chars.join('');
+  commitInputLinePosition(chars, cursor) {
+    const previous = chars.slice(0, cursor).join('');
+    const lines = previous.split('\n');
+    return { line: lines.length - 1, column: Array.from(lines[lines.length - 1]).length };
+  },
+
+  commitInputCursorForLine(chars, line, column) {
+    const lines = chars.join('').split('\n');
+    const target = Math.max(0, Math.min(line, lines.length - 1));
+    const preceding = lines.slice(0, target).reduce((length, item) => length + Array.from(item).length + 1, 0);
+    return preceding + Math.min(column, Array.from(lines[target]).length);
+  },
+
+  positionCommitInputCursor(chars, cursor) {
+    const lpos = this.commitInput._getCoords();
+    if (!lpos) return;
+    const position = this.commitInputLinePosition(chars, cursor);
+    const inputWidth = Math.max(1, lpos.xl - lpos.xi - this.commitInput.iwidth);
+    const lines = chars.join('').split('\n');
+    const rowsBefore = lines.slice(0, position.line).reduce((rows, line) => (
+      rows + Math.max(1, Math.ceil(this.commitInput.strWidth(line) / inputWidth))
+    ), 0);
+    const prefixWidth = this.commitInput.strWidth(Array.from(lines[position.line]).slice(0, position.column).join(''));
+    const row = rowsBefore + Math.floor(prefixWidth / inputWidth) - (this.commitInput.childBase || 0);
+    const column = prefixWidth % inputWidth;
+    this.screen.program.cup(lpos.yi + this.commitInput.itop + Math.max(0, row), lpos.xi + this.commitInput.ileft + column);
   },
 
   handleCommitInputKey(ch, key = {}) {
     if (!this.commitInputActive || this.state.collapsed.commit) return;
     if (key.ctrl || key.meta) return;
-    let value = this.commitInput.getValue();
-    if (key.name === 'backspace' || key.name === 'delete') value = this.trimLastCharacter(value);
-    else if (key.name === 'enter') value += '\n';
+    const chars = Array.from(this.commitInput.getValue());
+    let cursor = Math.max(0, Math.min(this.commitInputCursor, chars.length));
+    const position = this.commitInputLinePosition(chars, cursor);
+
+    if (key.name === 'left') cursor = Math.max(0, cursor - 1);
+    else if (key.name === 'right') cursor = Math.min(chars.length, cursor + 1);
+    else if (key.name === 'up') cursor = this.commitInputCursorForLine(chars, position.line - 1, position.column);
+    else if (key.name === 'down') cursor = this.commitInputCursorForLine(chars, position.line + 1, position.column);
+    else if (key.name === 'home') cursor = this.commitInputCursorForLine(chars, position.line, 0);
+    else if (key.name === 'end') cursor = this.commitInputCursorForLine(chars, position.line, Number.MAX_SAFE_INTEGER);
+    else if (key.name === 'backspace' && cursor > 0) { chars.splice(cursor - 1, 1); cursor -= 1; }
+    else if (key.name === 'delete' && cursor < chars.length) chars.splice(cursor, 1);
+    else if (key.name === 'enter') { chars.splice(cursor, 0, '\n'); cursor += 1; }
     else if (key.name === 'return' || key.name === 'escape') return;
-    else if (ch && !/^[\x00-\x1f\x7f]$/.test(ch)) value += ch;
+    else if (ch && !/^[\x00-\x1f\x7f]$/.test(ch)) {
+      const inserted = Array.from(ch);
+      chars.splice(cursor, 0, ...inserted);
+      cursor += inserted.length;
+    }
     else return;
-    this.commitInput.setValue(value);
+    this.commitInputCursor = cursor;
+    this.commitInput.setValue(chars.join(''));
     // 直接监听终端程序事件，避免输入法组合状态被 textarea 的编辑会话重置。
     if (!this.resizeCommitInputIfNeeded()) this.screen.render();
+    this.positionCommitInputCursor(chars, cursor);
   },
 
   reflowLeftPanel() {

@@ -36,6 +36,7 @@ class GitmousApp {
     this.autoRefreshRunning = false;
     this.lastRemoteCheckAt = 0;
     this.commitInputActive = false;
+    this.commitInputCursor = 0;
     this.detailDiffView = null;
     this.detailDiffConflictToolbars = [];
     this.detailDiffExpanded = loadedSettings.settings.detailDiffExpanded;
