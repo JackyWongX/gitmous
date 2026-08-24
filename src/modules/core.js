@@ -399,7 +399,7 @@ module.exports = {
 
   updateDetailToggleButton() {
     if (!this.detailToggleButton) return;
-    if (this.detailPanelCollapsed || !this.detailDiffView) {
+    if (this.isDetailPanelEffectivelyCollapsed() || !this.detailDiffView) {
       this.detailToggleButton.hide();
       return;
     }
@@ -412,11 +412,16 @@ module.exports = {
     return `    ${title} `;
   },
 
+  isDetailPanelEffectivelyCollapsed() {
+    return Boolean(this.detailPanelCollapsed && !this.detailPanelTemporarilyExpanded);
+  },
+
   updateDetailPanelLayout() {
-    const collapsed = Boolean(this.detailPanelCollapsed);
+    const collapsed = this.isDetailPanelEffectivelyCollapsed();
     this.leftPanel.width = collapsed ? '100%' : '42%';
     if (collapsed) {
-      this.hideDiffLineToolbar();
+      this.hideTooltip(null, false);
+      this.hideDiffLineToolbar(false);
       this.detailPanel.hide();
       this.detailPanelCollapseButton.hide();
       this.detailPanelExpandButton.show();
@@ -435,7 +440,14 @@ module.exports = {
   },
 
   toggleDetailPanel() {
+    if (this.detailPanelCollapsed && this.detailPanelTemporarilyExpanded) {
+      this.detailPanelTemporarilyExpanded = false;
+      this.updateDetailPanelLayout();
+      this.screen.render();
+      return;
+    }
     this.detailPanelCollapsed = !this.detailPanelCollapsed;
+    this.detailPanelTemporarilyExpanded = false;
     this.persistUserSettings();
     this.updateDetailPanelLayout();
     this.screen.render();
@@ -443,13 +455,12 @@ module.exports = {
 
   expandDetailPanelForFileDiff() {
     if (!this.detailPanelCollapsed) return;
-    this.detailPanelCollapsed = false;
-    this.persistUserSettings();
+    this.detailPanelTemporarilyExpanded = true;
     this.updateDetailPanelLayout();
   },
 
   collapseDetailPanelOnLeftBlank(data) {
-    if (!data || data.action !== 'mousedown' || this.detailPanelCollapsed || !this.pointInside(this.leftPanel, data)) return;
+    if (!data || data.action !== 'mousedown' || !this.detailPanelTemporarilyExpanded || !this.pointInside(this.leftPanel, data)) return;
     const passiveTargets = [
       this.leftPanel,
       this.repoPanel,
@@ -464,7 +475,9 @@ module.exports = {
       this.historyContent
     ];
     if (!passiveTargets.includes(this.screen.mouseDown)) return;
-    this.toggleDetailPanel();
+    this.detailPanelTemporarilyExpanded = false;
+    this.updateDetailPanelLayout();
+    this.screen.render();
   },
 
   updateDetailConflictButtons() {
@@ -476,7 +489,7 @@ module.exports = {
     ].filter(Boolean);
     const file = this.detailDiffView && this.detailDiffView.file;
     const visible = Boolean(
-      !this.detailPanelCollapsed &&
+      !this.isDetailPanelEffectivelyCollapsed() &&
       this.detailDiffView &&
       this.detailDiffView.conflicted &&
       file &&
@@ -613,14 +626,14 @@ module.exports = {
     return [...lines.slice(0, Math.max(1, maxLines - 1)), '…'];
   },
 
-  hideTooltip(anchor = null) {
+  hideTooltip(anchor = null, render = true) {
     if (anchor && this.activeTooltipAnchor && anchor !== this.activeTooltipAnchor) return;
     if (this.activeTooltip) {
       const tooltip = this.activeTooltip;
       this.activeTooltip = null;
       this.activeTooltipAnchor = null;
       this.destroyElement(tooltip);
-      this.screen.render();
+      if (render) this.screen.render();
       return;
     }
     this.activeTooltipAnchor = null;
@@ -731,12 +744,12 @@ module.exports = {
     }
   },
 
-  hideDiffLineToolbar() {
+  hideDiffLineToolbar(render = true) {
     if (!this.activeDiffLineToolbar) return;
     const toolbar = this.activeDiffLineToolbar;
     this.activeDiffLineToolbar = null;
     this.destroyElement(toolbar.root);
-    this.screen.render();
+    if (render) this.screen.render();
   },
 
   clearConflictDiffToolbars() {

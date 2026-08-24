@@ -41,6 +41,7 @@ class GitmousApp {
     this.detailDiffConflictToolbars = [];
     this.detailDiffExpanded = loadedSettings.settings.detailDiffExpanded;
     this.detailPanelCollapsed = loadedSettings.settings.detailPanelCollapsed;
+    this.detailPanelTemporarilyExpanded = false;
 
     createLayout(this);
     this.bindEvents();
