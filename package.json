@@ -1,6 +1,6 @@
 {
   "name": "gitmous",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Mouse-first terminal Git client",
   "main": "src/gitmous.js",
   "bin": {
